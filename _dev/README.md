@@ -1,66 +1,58 @@
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I57UKJ8)
+
 # Zotero Librarian
 
-**Tools for managing your Zotero library.**
+Tools for managing your Zotero library.
 
 ## Quick Start
 
 ```bash
-# See what's available
+# View available commands
 just
 
-# Library overview
+# Get library overview
 just stats
 
-# Find all quality issues
+# Identify quality issues
 just quality
 ```
 
 ## Philosophy
 
-These are **tools for intelligent agents**, not automation scripts.
+These tools assist intelligent agents rather than providing simple automation.
 
 ### Design Principles
 
-- **Readable** - Well-documented, self-contained Python
-- **Adaptable** - Start here, modify for your needs
-- **Non-destructive** - Find issues first, then decide what to fix
-- **No Truncation** - Always return complete data. If a query returns 500 items, return all 500.
+- **Readability**: Well-documented, self-contained Python.
+- **Adaptability**: Modular design for easy modification.
+- **Safety**: Non-destructive operations that identify issues before fixing.
+- **Completeness**: No data truncation; returns full query results.
 
 ## Tools
 
 ### Library Overview
 
-```bash
-just stats        # Item counts, collections, attachments
-just quality      # All quality issues at a glance
-```
+- `just stats`: Provides item counts, collections, and attachments.
+- `just quality`: Lists all quality issues at a glance.
 
-### Find Issues
+### Issue Detection
 
-```bash
-just find-no-pdf         # Items without PDF attachments
-just find-duplicates     # Duplicate titles
-just find-similar-tags   # Similar tags (typos, variations)
-```
+- `just find-no-pdf`: Identifies items missing PDF attachments.
+- `just find-duplicates`: Lists items with duplicate titles.
+- `just find-similar-tags`: Finds similar tags to identify typos or variations.
 
-### Browse
+### Library Browsing
 
-```bash
-just list-collections    # All collections with counts
-just list-tags           # All tags with frequency
-```
+- `just list-collections`: Lists all collections with item counts.
+- `just list-tags`: Lists all tags by frequency.
 
-### Fix Issues
+### Fixes
 
-```bash
-just tag-needs-pdf    # Tag all items missing PDF
-```
+- `just tag-needs-pdf`: Tags all items missing PDFs.
 
-### Python
+### Python Environment
 
-```bash
-just shell    # Python REPL with library loaded
-```
+- `just shell`: Launches a Python REPL with the library loaded.
 
 ## Python API
 
@@ -73,38 +65,29 @@ lib = ZoteroAgent()
 stats = lib.library_stats()
 issues = lib.find_quality_issues()
 
-# Find problems
+# Detect problems
 no_pdf = lib.find_items_without_pdf()
 duplicates = lib.find_duplicates_by_title()
 
-# Fix issues (with judgment)
-for item in no_pdf[:10]:  # First 10
+# Apply fixes with judgment
+for item in no_pdf[:10]:
     lib.add_tags(item["key"], ["needs-pdf"])
 ```
 
 ## Requirements
 
-- Zotero 7+ running
+- Zotero 7+ (running)
 - Local API enabled: **Edit → Settings → Advanced → "Allow other applications to communicate with Zotero"**
 
 ## Installation
 
 ```bash
-just install    # Uses uv
+just install # Uses uv
 ```
 
 ## Project Structure
 
-```
-zotero_librarian/
-├── agents.py            # Main tool - start here
-├── README.md            # This file
-├── justfile             # Quick commands
-├── .venv/               # Python environment (use it)
-├── _dev/                # Development (source, tests, docs)
-└── zoter_librarian/     # Legacy nested project (ignored)
-```
-
-**For librarians:** Use `agents.py`, `just`, and `.venv/` at the top level.
-
-**For developers:** See `_dev/` for source code and documentation.
+- `agents.py`: Main tool interface.
+- `justfile`: Command shortcuts.
+- `.venv/`: Python virtual environment.
+- `_dev/`: Development source code, tests, and documentation.
