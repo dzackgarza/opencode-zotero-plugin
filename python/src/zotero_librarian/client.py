@@ -2,6 +2,7 @@
 Zotero client initialization and core pagination helpers.
 """
 
+import os
 from typing import Generator
 from pyzotero import zotero
 
@@ -11,11 +12,15 @@ def get_zotero() -> zotero.Zotero:
 
     Requires Zotero 7+ running with local API enabled:
       Edit → Settings → Advanced → "Allow other applications to communicate with Zotero"
+
+    Credentials are read from environment variables:
+      ZOTERO_USER_ID   — library ID (defaults to "0" for local access)
+      ZOTERO_API_KEY   — API key (any non-empty string works for local access)
     """
     return zotero.Zotero(
-        library_id="0",
+        library_id=os.environ.get("ZOTERO_USER_ID", "0"),
         library_type="user",
-        api_key="fake",
+        api_key=os.environ.get("ZOTERO_API_KEY", "local"),
         local=True,
     )
 

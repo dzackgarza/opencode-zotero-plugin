@@ -7,8 +7,24 @@ Item inspection and write operations for Zotero library items.
 from typing import Any
 from pyzotero import zotero
 
+import re as _re
+
 from .connector import error_result, local_write, result_from_exception
 from .query import get_item, get_attachments
+
+_ITEM_KEY_RE = _re.compile(r"^[A-Z0-9]{8}$")
+
+
+def _validate_item_key(operation: str, item_key: str) -> dict[str, Any] | None:
+    """Return an error_result if item_key is not a valid 8-char alphanumeric Zotero key."""
+    if not _ITEM_KEY_RE.match(item_key):
+        return error_result(
+            operation,
+            "key_validation",
+            f"Invalid item key: {item_key!r}. Expected 8 uppercase alphanumeric characters.",
+            details={"item_key": item_key},
+        )
+    return None
 
 
 def _noop_result(operation: str, item_key: str) -> dict[str, Any]:
@@ -88,6 +104,8 @@ def update_item_fields(zot: zotero.Zotero, item_key: str, fields: dict[str, Any]
     Returns:
         Response from Zotero API
     """
+    if err := _validate_item_key("update_item_fields", item_key):
+        return err
     try:
         get_item(zot, item_key)
     except Exception as exc:
