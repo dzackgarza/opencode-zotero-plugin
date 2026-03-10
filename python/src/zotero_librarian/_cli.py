@@ -298,7 +298,12 @@ def cmd_rename_pdfs(args) -> None:
 def cmd_extract_text(args) -> None:
     from .attachments import extract_and_attach_text
 
-    _print(extract_and_attach_text(_zot(), args.item_key))
+    _print(extract_and_attach_text(
+        _zot(),
+        args.item_key,
+        extractor=args.extractor,
+        mineru_cmd=args.mineru_cmd,
+    ))
 
 
 def cmd_update_dois(args) -> None:
@@ -311,6 +316,15 @@ def cmd_update_dois(args) -> None:
             limit=args.limit,
         )
     )
+
+
+def cmd_lookup(args) -> None:
+    from .lookup import lookup_citekey, lookup_zotero_key
+
+    if args.action == "citekey":
+        _print(lookup_citekey(args.identifier))
+    elif args.action == "zotero-key":
+        _print(lookup_zotero_key(args.identifier))
 
 
 def cmd_sync(args) -> None:
@@ -428,12 +442,28 @@ def build_parser() -> argparse.ArgumentParser:
     rename_pdfs.add_argument("--apply", action="store_true", help="Actually write renames (default: dry-run)")
     rename_pdfs.add_argument("--collection", default=None, help="Restrict to a collection key")
 
-    extract_text = sub.add_parser("extract-text", help="Extract PDF text and attach as .txt")
+    extract_text = sub.add_parser("extract-text", help="Extract PDF to Markdown and attach result")
     extract_text.add_argument("item_key", help="Parent item key")
+    extract_text.add_argument(
+        "--extractor",
+        default="docling",
+        choices=["docling", "mineru"],
+        help="Extraction engine (default: docling)",
+    )
+    extract_text.add_argument(
+        "--mineru-cmd",
+        default=None,
+        dest="mineru_cmd",
+        help="Override MinerU command path (default: ZOTERO_MINERU_CMD env var or 'magic-pdf')",
+    )
 
     update_dois = sub.add_parser("update-dois", help="Recover DOIs for items tagged '⛔ No DOI found'")
     update_dois.add_argument("--apply", action="store_true", help="Write recovered DOIs back to Zotero")
     update_dois.add_argument("--limit", type=int, default=None, help="Maximum items to process")
+
+    lookup = sub.add_parser("lookup", help="Better BibTeX citation key ↔ Zotero key lookup")
+    lookup.add_argument("action", choices=["citekey", "zotero-key"])
+    lookup.add_argument("identifier", help="Citation key (for 'citekey') or Zotero item key (for 'zotero-key')")
 
     sync = sub.add_parser("sync", help="Sync status")
     sync.add_argument("action", choices=["status", "last"])
@@ -465,6 +495,7 @@ def main() -> None:
         "rename-pdfs": cmd_rename_pdfs,
         "extract-text": cmd_extract_text,
         "update-dois": cmd_update_dois,
+        "lookup": cmd_lookup,
         "sync": cmd_sync,
     }
 

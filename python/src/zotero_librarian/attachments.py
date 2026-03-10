@@ -467,50 +467,21 @@ def rename_pdf_attachments(
     return results
 
 
-def extract_and_attach_text(
-    zot: zotero.Zotero,
-    item_key: str,
-    *,
-    extractor: str = "pdftotext",
-) -> dict[str, Any]:
-    """Extract text from a PDF attachment and upload it as a .txt attachment.
+_EXTRACTORS = ("docling", "mineru")
 
-    Finds the first PDF attachment child of item_key, runs pdftotext
-    (from poppler-utils) to extract text, saves it to a temp file, and
-    uploads it via upload_pdf (which handles the /fulltext-attach endpoint).
 
-    Requires: pdftotext (poppler-utils) installed and on PATH.
+def _find_pdf_attachment(zot: zotero.Zotero, item_key: str, operation: str) -> dict[str, Any] | tuple[str, Path]:
+    """Locate the first PDF attachment for item_key on disk.
 
-    Args:
-        zot: Zotero client
-        item_key: Key of the parent Zotero item.
-        extractor: Extraction command to use.  Currently only "pdftotext"
-                   is supported.
-
-    Returns:
-        Dict with 'success' bool and relevant details.  If no PDF attachment
-        exists, returns a structured error result rather than raising.
+    Returns either an error_result dict (on failure) or (att_key, pdf_path) tuple.
     """
     import subprocess
-    import tempfile
-    import os
     from pathlib import Path as _Path
+    from .connector import result_from_exception
 
-    operation = "extract_and_attach_text"
-
-    if extractor != "pdftotext":
-        return error_result(
-            operation,
-            "input_validation",
-            f"Unsupported extractor: {extractor!r}.  Only 'pdftotext' is supported.",
-            details={"item_key": item_key, "extractor": extractor},
-        )
-
-    # Locate PDF attachment
     try:
         children = zot.children(item_key)
     except Exception as exc:
-        from .connector import result_from_exception
         return result_from_exception(operation, exc)
 
     pdf_attachment = next(
@@ -525,20 +496,17 @@ def extract_and_attach_text(
 
     if pdf_attachment is None:
         return error_result(
-            operation,
-            "locate_pdf",
+            operation, "locate_pdf",
             f"No PDF attachment found for item {item_key}.",
             details={"item_key": item_key},
         )
 
-    # Resolve path on disk: ~/Zotero/storage/<att_key>/<filename>
     att_data = pdf_attachment["data"]
     att_key = pdf_attachment["key"]
     filename = att_data.get("filename", "")
     if not filename:
         return error_result(
-            operation,
-            "locate_pdf",
+            operation, "locate_pdf",
             f"PDF attachment {att_key} has no filename recorded.",
             details={"item_key": item_key, "attachment_key": att_key},
         )
@@ -546,71 +514,164 @@ def extract_and_attach_text(
     pdf_path = _Path.home() / "Zotero" / "storage" / att_key / filename
     if not pdf_path.exists():
         return error_result(
-            operation,
-            "locate_pdf",
+            operation, "locate_pdf",
             f"PDF file not found on disk: {pdf_path}",
-            details={
-                "item_key": item_key,
-                "attachment_key": att_key,
-                "pdf_path": str(pdf_path),
-            },
+            details={"item_key": item_key, "attachment_key": att_key, "pdf_path": str(pdf_path)},
         )
 
-    # Run pdftotext
+    return att_key, pdf_path
+
+
+def _extract_docling(pdf_path: Path, tmp_dir: Path) -> tuple[Path, str]:
+    """Run docling via uvx and return (output_path, title).
+
+    No installation required — runs via uvx.
+    Requires: uvx (uv) on PATH.
+    """
+    import subprocess
+
     try:
-        proc = subprocess.run(
-            ["pdftotext", str(pdf_path), "-"],
-            capture_output=True,
-            check=True,
-            text=True,
+        subprocess.run(
+            [
+                "uvx", "--from", "docling", "docling",
+                str(pdf_path),
+                "--to", "md",
+                "--output", str(tmp_dir),
+            ],
+            capture_output=True, check=True, text=True,
         )
-        extracted_text = proc.stdout
-    except FileNotFoundError:
-        return error_result(
-            operation,
-            "pdftotext_not_found",
-            "pdftotext is not installed or not on PATH.  Install poppler-utils.",
-            details={"item_key": item_key, "pdf_path": str(pdf_path)},
-        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("uvx not found. Install uv: https://docs.astral.sh/uv/") from exc
     except subprocess.CalledProcessError as exc:
-        return error_result(
-            operation,
-            "pdftotext_failed",
-            f"pdftotext exited with code {exc.returncode}: {exc.stderr.strip()}",
-            details={
-                "item_key": item_key,
-                "pdf_path": str(pdf_path),
-                "stderr": exc.stderr,
-            },
+        raise RuntimeError(
+            f"docling exited {exc.returncode}: {exc.stderr.strip()}"
+        ) from exc
+
+    out_path = tmp_dir / (pdf_path.stem + ".md")
+    if not out_path.exists():
+        raise RuntimeError(
+            f"docling ran but expected output not found: {out_path}"
         )
+    return out_path, pdf_path.stem + "_docling.md"
 
-    # Save to a temp .txt file and upload
-    stem = _Path(filename).stem
-    txt_title = stem + ".txt"
 
-    with tempfile.NamedTemporaryFile(
-        prefix="zotero-text-",
-        suffix=".txt",
-        dir="/tmp",
-        delete=False,
-        mode="w",
-        encoding="utf-8",
-    ) as tmp:
-        tmp.write(extracted_text)
-        tmp_path = tmp.name
+def _extract_mineru(pdf_path: Path, tmp_dir: Path, *, mineru_cmd: str) -> tuple[Path, str]:
+    """Run MinerU and return (output_path, title).
+
+    MinerU must be configured separately. Set ZOTERO_MINERU_CMD to the full
+    command (e.g. '/path/to/conda/envs/mineru/bin/magic-pdf' or 'magic-pdf').
+    Defaults to 'magic-pdf' (old CLI) if ZOTERO_MINERU_CMD is not set.
+
+    Install MinerU: pip install magic-pdf[full] --extra-index-url https://wheels.myhloli.com
+    Or follow https://github.com/opendatalab/MinerU for GPU/model setup.
+    """
+    import subprocess
 
     try:
-        # upload_pdf / attach_file_to_item works for any file; txt upload is fine
-        upload_result = attach_file_to_item(
-            zot,
-            item_key,
-            tmp_path,
-            title=txt_title,
-            operation=operation,
+        subprocess.run(
+            [mineru_cmd, "-p", str(pdf_path), "-o", str(tmp_dir), "-m", "auto"],
+            capture_output=True, check=True, text=True,
         )
-    finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"MinerU command not found: {mineru_cmd!r}. "
+            "Set ZOTERO_MINERU_CMD to the full path, or install magic-pdf."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"MinerU exited {exc.returncode}: {exc.stderr.strip()}"
+        ) from exc
+
+    # MinerU output structure: {tmp_dir}/{stem}/auto/{stem}.md
+    stem = pdf_path.stem
+    out_path = tmp_dir / stem / "auto" / (stem + ".md")
+    if not out_path.exists():
+        raise RuntimeError(
+            f"MinerU ran but expected output not found: {out_path}"
+        )
+    return out_path, stem + "_mineru.md"
+
+
+def extract_and_attach_text(
+    zot: zotero.Zotero,
+    item_key: str,
+    *,
+    extractor: str = "docling",
+    mineru_cmd: str | None = None,
+) -> dict[str, Any]:
+    """Extract text from a PDF attachment and upload the result as a Markdown attachment.
+
+    Finds the first PDF attachment child of item_key, runs the chosen extractor,
+    and uploads the output as a new child attachment via the /fulltext-attach endpoint.
+
+    Extractors:
+        "docling" — AI-powered PDF→Markdown via IBM Docling (recommended). Runs via
+                    `uvx --from docling docling`; no installation required beyond uv.
+        "mineru"  — High-quality PDF→Markdown via MinerU. Requires a separate MinerU
+                    installation. Set ZOTERO_MINERU_CMD to the full path of the
+                    magic-pdf binary (default: 'magic-pdf').
+
+    Args:
+        zot:        Zotero client.
+        item_key:   Key of the parent Zotero item.
+        extractor:  One of "docling" (default) or "mineru".
+        mineru_cmd: Override the MinerU command. Defaults to the ZOTERO_MINERU_CMD
+                    environment variable, then "magic-pdf".
+
+    Returns:
+        Dict with "success" bool and details. Returns a structured error if the
+        PDF is missing, the extractor is not installed, or extraction fails.
+    """
+    import os
+    import tempfile
+
+    operation = "extract_and_attach_text"
+
+    if extractor not in _EXTRACTORS:
+        return error_result(
+            operation, "input_validation",
+            f"Unknown extractor: {extractor!r}. Choose from: {', '.join(_EXTRACTORS)}",
+            details={"item_key": item_key, "extractor": extractor},
+        )
+
+    found = _find_pdf_attachment(zot, item_key, operation)
+    if isinstance(found, dict):  # error_result
+        return found
+    att_key, pdf_path = found
+
+    with tempfile.TemporaryDirectory(prefix="zotero-extract-") as tmp_str:
+        tmp_dir = Path(tmp_str)
+        try:
+            if extractor == "docling":
+                out_path, title = _extract_docling(pdf_path, tmp_dir)
+            elif extractor == "mineru":
+                cmd = mineru_cmd or os.environ.get("ZOTERO_MINERU_CMD", "magic-pdf")
+                out_path, title = _extract_mineru(pdf_path, tmp_dir, mineru_cmd=cmd)
+        except RuntimeError as exc:
+            return error_result(
+                operation, f"{extractor}_failed",
+                str(exc),
+                details={"item_key": item_key, "pdf_path": str(pdf_path), "extractor": extractor},
+            )
+
+        characters = out_path.stat().st_size
+
+        # Stage output into /tmp for the /fulltext-attach endpoint
+        suffix = out_path.suffix
+        with tempfile.NamedTemporaryFile(
+            prefix="zotero-upload-", suffix=suffix, dir="/tmp", delete=False,
+        ) as staged:
+            staged_path = staged.name
+        try:
+            import shutil
+            shutil.copy2(out_path, staged_path)
+            upload_result = attach_file_to_item(
+                zot, item_key, staged_path,
+                title=title, operation=operation,
+            )
+        finally:
+            if os.path.exists(staged_path):
+                os.unlink(staged_path)
 
     if not upload_result.get("success"):
         return upload_result
@@ -619,10 +680,10 @@ def extract_and_attach_text(
         **upload_result,
         "operation": operation,
         "item_key": item_key,
-        # attachment_key from upload_result is the newly created .txt attachment key
         "source_pdf_key": att_key,
-        "txt_title": txt_title,
-        "characters_extracted": len(extracted_text),
+        "extractor": extractor,
+        "output_title": title,
+        "characters_extracted": characters,
     }
 
 
