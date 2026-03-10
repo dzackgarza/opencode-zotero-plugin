@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "file:///path/to/opencode-plugins/opencode-zotero-plugin/"
+  ],
+  "permission": {
+    "zotero_count": "allow",
+    "zotero_stats": "allow",
+    "zotero_search": "allow",
+    "zotero_get_item": "allow",
+    "zotero_update_item": "allow",
+    "zotero_tags": "allow",
+    "zotero_import": "allow",
+    "zotero_export": "allow",
+    "zotero_collections": "allow",
+    "zotero_children": "allow",
+    "zotero_batch_add": "allow",
+    "zotero_delete_items": "allow",
+    "zotero_check_pdfs": "allow",
+    "zotero_crossref": "allow",
+    "zotero_find_dois": "allow",
+    "zotero_fetch_pdfs": "allow"
+  }
+}
