@@ -1,9 +1,10 @@
 """Tests for PDF extraction (extract_and_attach_text and extractor helpers).
 
 Some tests require Zotero running; others test error paths only.
-Tests requiring pdftotext or docling are skipped if those tools are absent.
+Tests requiring docling are skipped if that tool is absent.
 """
 
+import os
 import shutil
 from pathlib import Path
 
@@ -80,8 +81,16 @@ class TestExtractorRegistry:
 # ---------------------------------------------------------------------------
 
 class TestInvalidExtractor:
-    def test_unknown_extractor_returns_structured_error(self, zot):
-        result = extract_and_attach_text(zot, "AAAAAAAA", extractor="magic_unicorn")
+    def test_unknown_configured_extractor_returns_structured_error(self, zot):
+        old_value = os.environ.get("ZOTERO_PDF_EXTRACTOR")
+        os.environ["ZOTERO_PDF_EXTRACTOR"] = "magic_unicorn"
+        try:
+            result = extract_and_attach_text(zot, "AAAAAAAA")
+        finally:
+            if old_value is None:
+                os.environ.pop("ZOTERO_PDF_EXTRACTOR", None)
+            else:
+                os.environ["ZOTERO_PDF_EXTRACTOR"] = old_value
         assert result["success"] is False
         assert result["stage"] == "input_validation"
         assert "magic_unicorn" in result["error"]
@@ -111,16 +120,12 @@ def item_without_pdf(zot):
 
 class TestNoPdfItem:
     def test_returns_locate_pdf_error(self, zot, item_without_pdf):
-        result = extract_and_attach_text(
-            zot, item_without_pdf["key"], extractor="docling"
-        )
+        result = extract_and_attach_text(zot, item_without_pdf["key"])
         assert result["success"] is False
         assert result["stage"] == "locate_pdf"
 
     def test_error_mentions_item_key(self, zot, item_without_pdf):
-        result = extract_and_attach_text(
-            zot, item_without_pdf["key"], extractor="docling"
-        )
+        result = extract_and_attach_text(zot, item_without_pdf["key"])
         assert item_without_pdf["key"] in result["error"] or \
                item_without_pdf["key"] in str(result.get("details", {}))
 

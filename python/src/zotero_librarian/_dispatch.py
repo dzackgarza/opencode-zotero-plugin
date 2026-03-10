@@ -19,7 +19,7 @@ from .enrichment import (
 )
 from .export import export_collection, export_to_bibtex, export_to_csljson, export_to_csv, export_to_json, export_to_ris
 from .import_ import import_by_doi, import_by_isbn, import_by_pmid
-from .lookup import lookup_citekey, lookup_zotero_key
+from .lookup import lookup, lookup_citekey, lookup_zotero_key
 from .items import (
     add_tags_to_item,
     delete_item,
@@ -116,9 +116,8 @@ TOOLS = {
     "extract_and_attach_text": lambda zot, a: extract_and_attach_text(
         zot,
         a["item_key"],
-        extractor=a.get("extractor", "docling"),
-        mineru_cmd=a.get("mineru_cmd"),
     ),
+    "lookup": lambda zot, a: lookup(a["citekey"]),
     "fetch_pdfs": lambda zot, a: fetch_pdfs(
         zot,
         dry_run=a.get("dry_run", False),

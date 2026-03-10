@@ -7,7 +7,8 @@ Auto-skipped when the BBT endpoint is unreachable.
 import pytest
 import httpx
 
-from zotero_librarian.lookup import lookup_citekey, lookup_zotero_key
+from zotero_librarian._cli import build_parser
+from zotero_librarian.lookup import lookup, lookup_citekey, lookup_zotero_key
 
 
 BBT_RPC_URL = "http://127.0.0.1:23119/better-bibtex/json-rpc"
@@ -67,6 +68,14 @@ class TestLookupZoteroKey:
 
 
 class TestLookupCitekey:
+    def test_primary_lookup_returns_zotero_key(self, bbt_item):
+        expected_zotero_key, citekey = bbt_item
+        result = lookup(citekey)
+        assert result["success"] is True
+        assert result["operation"] == "lookup"
+        assert result["zotero_key"] == expected_zotero_key
+        assert result["citekey"] == citekey
+
     def test_known_citekey_returns_zotero_key(self, bbt_item):
         expected_zotero_key, citekey = bbt_item
         result = lookup_citekey(citekey)
@@ -112,3 +121,17 @@ class TestRoundTrip:
         back = lookup_zotero_key(key_result["zotero_key"])
         assert back["success"] is True
         assert back["citekey"] == citekey
+
+
+class TestLookupCli:
+    def test_lookup_defaults_to_citekey_mode(self):
+        args = build_parser().parse_args(["lookup", "smith2020foo"])
+        assert args.command == "lookup"
+        assert args.identifier == "smith2020foo"
+        assert args.zotero_key is False
+
+    def test_lookup_supports_reverse_flag(self):
+        args = build_parser().parse_args(["lookup", "VNPN6FHT", "--zotero-key"])
+        assert args.command == "lookup"
+        assert args.identifier == "VNPN6FHT"
+        assert args.zotero_key is True

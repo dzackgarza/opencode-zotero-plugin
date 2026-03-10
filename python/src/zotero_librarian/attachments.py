@@ -4,6 +4,7 @@ from __future__ import annotations
 Attachment file operations for Zotero library items.
 """
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -467,7 +468,15 @@ def rename_pdf_attachments(
     return results
 
 
-_EXTRACTORS = ("docling", "mineru")
+_DEFAULT_PDF_EXTRACTOR = "docling"
+_PDF_EXTRACTOR_ENV = "ZOTERO_PDF_EXTRACTOR"
+_MINERU_CMD_ENV = "ZOTERO_MINERU_CMD"
+_EXTRACTORS = (_DEFAULT_PDF_EXTRACTOR, "mineru")
+
+
+def _resolve_pdf_extractor(extractor: str | None = None) -> str:
+    configured = extractor or os.environ.get(_PDF_EXTRACTOR_ENV, _DEFAULT_PDF_EXTRACTOR)
+    return configured.strip().lower()
 
 
 def _find_pdf_attachment(zot: zotero.Zotero, item_key: str, operation: str) -> dict[str, Any] | tuple[str, Path]:
@@ -475,7 +484,6 @@ def _find_pdf_attachment(zot: zotero.Zotero, item_key: str, operation: str) -> d
 
     Returns either an error_result dict (on failure) or (att_key, pdf_path) tuple.
     """
-    import subprocess
     from pathlib import Path as _Path
     from .connector import result_from_exception
 
@@ -596,42 +604,34 @@ def extract_and_attach_text(
     zot: zotero.Zotero,
     item_key: str,
     *,
-    extractor: str = "docling",
+    extractor: str | None = None,
     mineru_cmd: str | None = None,
 ) -> dict[str, Any]:
     """Extract text from a PDF attachment and upload the result as a Markdown attachment.
 
-    Finds the first PDF attachment child of item_key, runs the chosen extractor,
+    Finds the first PDF attachment child of item_key, runs the configured extractor,
     and uploads the output as a new child attachment via the /fulltext-attach endpoint.
-
-    Extractors:
-        "docling" — AI-powered PDF→Markdown via IBM Docling (recommended). Runs via
-                    `uvx --from docling docling`; no installation required beyond uv.
-        "mineru"  — High-quality PDF→Markdown via MinerU. Requires a separate MinerU
-                    installation. Set ZOTERO_MINERU_CMD to the full path of the
-                    magic-pdf binary (default: 'magic-pdf').
 
     Args:
         zot:        Zotero client.
         item_key:   Key of the parent Zotero item.
-        extractor:  One of "docling" (default) or "mineru".
-        mineru_cmd: Override the MinerU command. Defaults to the ZOTERO_MINERU_CMD
-                    environment variable, then "magic-pdf".
+        extractor:  Internal override for the configured extractor. Defaults to
+                    ZOTERO_PDF_EXTRACTOR, then "docling".
+        mineru_cmd: Internal override for the MinerU command. Defaults to the
+                    ZOTERO_MINERU_CMD environment variable, then "magic-pdf".
 
     Returns:
         Dict with "success" bool and details. Returns a structured error if the
         PDF is missing, the extractor is not installed, or extraction fails.
     """
-    import os
-    import tempfile
-
     operation = "extract_and_attach_text"
+    selected_extractor = _resolve_pdf_extractor(extractor)
 
-    if extractor not in _EXTRACTORS:
+    if selected_extractor not in _EXTRACTORS:
         return error_result(
             operation, "input_validation",
-            f"Unknown extractor: {extractor!r}. Choose from: {', '.join(_EXTRACTORS)}",
-            details={"item_key": item_key, "extractor": extractor},
+            f"Unknown extractor: {selected_extractor!r}. Choose from: {', '.join(_EXTRACTORS)}",
+            details={"item_key": item_key, "extractor": selected_extractor},
         )
 
     found = _find_pdf_attachment(zot, item_key, operation)
@@ -642,36 +642,43 @@ def extract_and_attach_text(
     with tempfile.TemporaryDirectory(prefix="zotero-extract-") as tmp_str:
         tmp_dir = Path(tmp_str)
         try:
-            if extractor == "docling":
+            if selected_extractor == "docling":
                 out_path, title = _extract_docling(pdf_path, tmp_dir)
-            elif extractor == "mineru":
-                cmd = mineru_cmd or os.environ.get("ZOTERO_MINERU_CMD", "magic-pdf")
+            else:
+                cmd = mineru_cmd or os.environ.get(_MINERU_CMD_ENV, "magic-pdf")
                 out_path, title = _extract_mineru(pdf_path, tmp_dir, mineru_cmd=cmd)
         except RuntimeError as exc:
             return error_result(
-                operation, f"{extractor}_failed",
+                operation, f"{selected_extractor}_failed",
                 str(exc),
-                details={"item_key": item_key, "pdf_path": str(pdf_path), "extractor": extractor},
+                details={
+                    "item_key": item_key,
+                    "pdf_path": str(pdf_path),
+                    "extractor": selected_extractor,
+                },
             )
-
-        characters = out_path.stat().st_size
-
-        # Stage output into /tmp for the /fulltext-attach endpoint
-        suffix = out_path.suffix
-        with tempfile.NamedTemporaryFile(
-            prefix="zotero-upload-", suffix=suffix, dir="/tmp", delete=False,
-        ) as staged:
-            staged_path = staged.name
         try:
-            import shutil
-            shutil.copy2(out_path, staged_path)
-            upload_result = attach_file_to_item(
-                zot, item_key, staged_path,
-                title=title, operation=operation,
+            characters = out_path.stat().st_size
+        except OSError as exc:
+            return error_result(
+                operation,
+                f"{selected_extractor}_output_metadata",
+                f"Could not inspect extracted output: {exc}",
+                details={
+                    "item_key": item_key,
+                    "pdf_path": str(pdf_path),
+                    "extractor": selected_extractor,
+                    "output_path": str(out_path),
+                    "exception_type": type(exc).__name__,
+                },
             )
-        finally:
-            if os.path.exists(staged_path):
-                os.unlink(staged_path)
+        upload_result = attach_file_to_item(
+            zot,
+            item_key,
+            str(out_path),
+            title=title,
+            operation=operation,
+        )
 
     if not upload_result.get("success"):
         return upload_result
@@ -681,7 +688,7 @@ def extract_and_attach_text(
         "operation": operation,
         "item_key": item_key,
         "source_pdf_key": att_key,
-        "extractor": extractor,
+        "extractor": selected_extractor,
         "output_title": title,
         "characters_extracted": characters,
     }

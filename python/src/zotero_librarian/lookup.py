@@ -31,6 +31,13 @@ def _bbt_rpc(method: str, params: list[Any], *, operation: str) -> dict[str, Any
             _BBT_UNAVAILABLE_MSG,
             details={"method": method, "exception_type": type(exc).__name__},
         )
+    if response.status_code >= 400:
+        return error_result(
+            operation,
+            "bbt_rpc_status",
+            "Better BibTeX JSON-RPC returned an unexpected HTTP status.",
+            details={"method": method, "status_code": response.status_code, "body": response.text},
+        )
     try:
         data = response.json()
     except ValueError:
@@ -58,7 +65,7 @@ def _extract_item_key_from_uri(uri: str) -> str | None:
     return None
 
 
-def lookup_citekey(citekey: str) -> dict[str, Any]:
+def _lookup_citekey(citekey: str, *, operation: str) -> dict[str, Any]:
     """Look up a Zotero item key given a Better BibTeX citation key.
 
     Args:
@@ -68,8 +75,6 @@ def lookup_citekey(citekey: str) -> dict[str, Any]:
         dict with success, zotero_key, and citekey on success;
         or error dict if Better BibTeX is unavailable or key not found.
     """
-    operation = "lookup_citekey"
-
     rpc = _bbt_rpc("item.search", [citekey], operation=operation)
     if not rpc.get("success"):
         return rpc
@@ -102,6 +107,16 @@ def lookup_citekey(citekey: str) -> dict[str, Any]:
         f"No item found with citation key: {citekey!r}",
         details={"citekey": citekey, "search_results": len(results)},
     )
+
+
+def lookup(citekey: str) -> dict[str, Any]:
+    """Look up a Zotero item key given a Better BibTeX citation key."""
+    return _lookup_citekey(citekey, operation="lookup")
+
+
+def lookup_citekey(citekey: str) -> dict[str, Any]:
+    """Backward-compatible alias for Better BibTeX citekey lookup."""
+    return _lookup_citekey(citekey, operation="lookup_citekey")
 
 
 def lookup_zotero_key(zotero_key: str) -> dict[str, Any]:
