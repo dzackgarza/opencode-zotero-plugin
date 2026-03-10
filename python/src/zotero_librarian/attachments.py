@@ -413,30 +413,35 @@ def rename_pdf_attachments(
     """
     from .items import update_item_fields
 
+    def _pdf_candidates_for_parent(parent_item: dict, children: list[dict]) -> list[dict]:
+        """Build candidate rename records for one parent, with collision disambiguation."""
+        parent_title = parent_item["data"].get("title", "") or parent_item["key"]
+        base_slug = _slugify(parent_title) or parent_item["key"].lower()
+        pdfs = [
+            child for child in children
+            if child.get("data", {}).get("itemType") == "attachment"
+            and child.get("data", {}).get("contentType") == "application/pdf"
+        ]
+        records = []
+        seen: dict[str, int] = {}
+        for child in pdfs:
+            slug = base_slug
+            count = seen.get(slug, 0) + 1
+            seen[slug] = count
+            disambiguated = slug if count == 1 else f"{slug}_{count}"
+            records.append({
+                "key": child["key"],
+                "old_title": child["data"].get("title", ""),
+                "new_title": disambiguated + ".pdf",
+            })
+        return records
+
     # Collect PDF attachments with their parent titles
     if collection_key:
-        # Get collection items and then their PDF children
         candidates = []
         for item in zot.collection_items_top(collection_key):
-            parent_title = item["data"].get("title", "") or item["key"]
-            slug = _slugify(parent_title)
-            if not slug:
-                slug = item["key"].lower()
-            new_title = slug + ".pdf"
             children = zot.children(item["key"])
-            for child in children:
-                cdata = child.get("data", {})
-                if (
-                    cdata.get("itemType") == "attachment"
-                    and cdata.get("contentType") == "application/pdf"
-                ):
-                    candidates.append(
-                        {
-                            "key": child["key"],
-                            "old_title": cdata.get("title", ""),
-                            "new_title": new_title,
-                        }
-                    )
+            candidates.extend(_pdf_candidates_for_parent(item, children))
     else:
         candidates = []
         from .client import _get_library_with_children
@@ -444,24 +449,7 @@ def rename_pdf_attachments(
         for item in _get_library_with_children(zot):
             if item["data"].get("itemType") in {"attachment", "note"}:
                 continue
-            parent_title = item["data"].get("title", "") or item["key"]
-            slug = _slugify(parent_title)
-            if not slug:
-                slug = item["key"].lower()
-            new_title = slug + ".pdf"
-            for child in item.get("_children", []):
-                cdata = child.get("data", {})
-                if (
-                    cdata.get("itemType") == "attachment"
-                    and cdata.get("contentType") == "application/pdf"
-                ):
-                    candidates.append(
-                        {
-                            "key": child["key"],
-                            "old_title": cdata.get("title", ""),
-                            "new_title": new_title,
-                        }
-                    )
+            candidates.extend(_pdf_candidates_for_parent(item, item.get("_children", [])))
 
     results: list[dict[str, Any]] = []
     for entry in candidates:
@@ -631,7 +619,8 @@ def extract_and_attach_text(
         **upload_result,
         "operation": operation,
         "item_key": item_key,
-        "attachment_key": att_key,
+        # attachment_key from upload_result is the newly created .txt attachment key
+        "source_pdf_key": att_key,
         "txt_title": txt_title,
         "characters_extracted": len(extracted_text),
     }
@@ -673,3 +662,7 @@ def replace_attachment(zot: zotero.Zotero, attachment_key: str, new_file_path: s
         )
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# pdf_management.pdf_processor alias — extract text and attach .txt back to the item
+pdf_processor = extract_and_attach_text

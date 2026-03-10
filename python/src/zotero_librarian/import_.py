@@ -8,6 +8,7 @@ import httpx
 from pyzotero import zotero
 
 from .connector import ConnectorWriteError, error_result, import_text, local_write, result_from_exception, save_item
+from .validation import validate_doi
 
 
 def _import_success(
@@ -66,6 +67,14 @@ def import_by_doi(
     Returns:
         The key of the created item, or None if the API request failed
     """
+    if not validate_doi(doi):
+        return error_result(
+            "import_by_doi",
+            "doi_validation",
+            f"Invalid DOI format: {doi!r}. Expected pattern: 10.XXXX/...",
+            details={"doi": doi},
+        )
+
     url = f"https://api.crossref.org/works/{doi}"
 
     try:

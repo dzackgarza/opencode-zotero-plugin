@@ -60,7 +60,11 @@ def cmd_search(args) -> None:
     elif args.action == "by-author":
         _print(search_by_author(zot, args.query))
     elif args.action == "by-year":
-        _print(search_by_year(zot, int(args.query)))
+        try:
+            year = int(args.query)
+        except (TypeError, ValueError):
+            build_parser().error(f"'by-year' requires a numeric year, got: {args.query!r}")
+        _print(search_by_year(zot, year))
     elif args.action == "by-doi":
         _print(get_item_by_doi(zot, args.query))
     elif args.action == "without-pdf":
@@ -74,7 +78,13 @@ def cmd_search(args) -> None:
     elif args.action == "duplicate-titles":
         _print(duplicate_titles(zot))
     elif args.action == "fuzzy-duplicate-titles":
-        threshold = int(args.query) if args.query else 85
+        if args.query:
+            try:
+                threshold = int(args.query)
+            except ValueError:
+                build_parser().error(f"'fuzzy-duplicate-titles' threshold must be an integer, got: {args.query!r}")
+        else:
+            threshold = 85
         _print(find_fuzzy_duplicates_by_title(zot, threshold=threshold))
     elif args.action == "invalid-dois":
         _print(list(items_with_invalid_doi(zot)))

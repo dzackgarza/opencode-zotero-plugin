@@ -524,9 +524,17 @@ def update_missing_dois(
             try:
                 update_result = update_item_fields(zot, item["key"], {"DOI": doi})
                 if update_result.get("success"):
-                    remove_tags_from_item(zot, item["key"], [_NO_DOI_TAG])
-                    add_tags_to_item(zot, item["key"], [_DOI_RECOVERED_TAG])
-                    entry["applied"] = True
+                    remove_result = remove_tags_from_item(zot, item["key"], [_NO_DOI_TAG])
+                    add_result = add_tags_to_item(zot, item["key"], [_DOI_RECOVERED_TAG])
+                    tag_errors = {}
+                    if not remove_result.get("success"):
+                        tag_errors["remove_tag_error"] = remove_result
+                    if not add_result.get("success"):
+                        tag_errors["add_tag_error"] = add_result
+                    if tag_errors:
+                        entry["apply_error"] = tag_errors
+                    else:
+                        entry["applied"] = True
                 else:
                     entry["apply_error"] = update_result
             except Exception as exc:

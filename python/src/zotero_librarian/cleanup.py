@@ -158,6 +158,11 @@ def clean_missing_pdfs(
         if content_type != "application/pdf":
             continue
 
+        # Linked attachments live outside ~/Zotero/storage/ intentionally — skip them
+        link_mode = data.get("linkMode", "")
+        if link_mode in ("linked_file", "linked_url"):
+            continue
+
         filename = data.get("filename", "") or ""
         if not filename:
             continue
