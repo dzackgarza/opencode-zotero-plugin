@@ -662,3 +662,7 @@ def replace_attachment(zot: zotero.Zotero, attachment_key: str, new_file_path: s
         )
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# pdf_management.pdf_processor alias — extract text and attach .txt back to the item
+pdf_processor = extract_and_attach_text
