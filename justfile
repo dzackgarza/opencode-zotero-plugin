@@ -1,60 +1,40 @@
-# Zotero Librarian
-#
-# Usage: just <command>
-# Run `just` to see all commands
+# opencode-zotero-plugin justfile
 
-# Show available commands
-help:
-    @just --list
+# Run all checks
+check: typecheck test-import
 
-# Library overview
-stats:
-    @.venv/bin/python _dev/scripts/manage.py stats
+# TypeScript typecheck
+typecheck:
+    bun run typecheck
 
-# All quality issues
-quality:
-    @.venv/bin/python _dev/scripts/manage.py quality
+# Verify Python package imports correctly
+test-import:
+    cd python && uv run python -c "import zotero_librarian; print('Python import OK')"
 
-# Find items without PDF
-find-no-pdf:
-    @.venv/bin/python _dev/scripts/manage.py find-no-pdf
-
-# Find duplicate titles
-find-duplicates:
-    @.venv/bin/python _dev/scripts/manage.py find-duplicates
-
-# Find similar tags
-find-similar-tags:
-    @.venv/bin/python _dev/scripts/manage.py find-similar-tags
-
-# List collections
-list-collections:
-    @.venv/bin/python _dev/scripts/manage.py list-collections
-
-# List tags
-list-tags:
-    @.venv/bin/python _dev/scripts/manage.py list-tags
-
-# Tag items missing PDF
-tag-needs-pdf:
-    @.venv/bin/python _dev/scripts/manage.py tag-needs-pdf
-
-# Python REPL with library loaded
-shell:
-    @.venv/bin/python -c "from agents import ZoteroAgent; lib = ZoteroAgent(); print('Ready: lib = ZoteroAgent()'); import code; code.interact(local=dict(globals(), **locals()))"
-
-# Install dependencies
-install:
-    @cd _dev && uv sync
-
-# Run tests
+# Run Python tests (requires Zotero running)
 test:
-    @cd _dev && uv run pytest
+    cd python && uv run pytest
 
-# Format code
-fmt:
-    @cd _dev && uv run ruff format .
+# Test dispatch protocol
+dispatch tool args='{}':
+    cd python && uv run python -m zotero_librarian._dispatch {{tool}} '{{args}}'
 
-# Lint code
-lint:
-    @cd _dev && uv run ruff check .
+# Run MCP server
+mcp:
+    cd mcp-server && uv run fastmcp run server.py
+
+# Install TS dependencies
+install:
+    bun install
+
+# Run opencode with this plugin for testing
+run prompt:
+    \opencode run --agent Minimal '{{prompt}}'
+
+# Setup npm trusted publisher (one-time manual setup)
+setup-npm-trust:
+    npm trust github --repository dzackgarza/{{file_stem(justfile_directory())}} --file publish.yml
+
+# Manual publish from local (requires 2FA)
+publish:
+    npm publish
