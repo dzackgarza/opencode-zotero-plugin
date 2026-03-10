@@ -313,6 +313,15 @@ def cmd_update_dois(args) -> None:
     )
 
 
+def cmd_lookup(args) -> None:
+    from .lookup import lookup, lookup_zotero_key
+
+    if args.zotero_key:
+        _print(lookup_zotero_key(args.identifier))
+        return
+    _print(lookup(args.identifier))
+
+
 def cmd_sync(args) -> None:
     from .sync import get_last_sync, get_sync_status
 
@@ -428,12 +437,23 @@ def build_parser() -> argparse.ArgumentParser:
     rename_pdfs.add_argument("--apply", action="store_true", help="Actually write renames (default: dry-run)")
     rename_pdfs.add_argument("--collection", default=None, help="Restrict to a collection key")
 
-    extract_text = sub.add_parser("extract-text", help="Extract PDF text and attach as .txt")
+    extract_text = sub.add_parser(
+        "extract-text",
+        help="Extract PDF to Markdown with the configured engine and attach the result",
+    )
     extract_text.add_argument("item_key", help="Parent item key")
 
     update_dois = sub.add_parser("update-dois", help="Recover DOIs for items tagged '⛔ No DOI found'")
     update_dois.add_argument("--apply", action="store_true", help="Write recovered DOIs back to Zotero")
     update_dois.add_argument("--limit", type=int, default=None, help="Maximum items to process")
+
+    lookup = sub.add_parser("lookup", help="Better BibTeX citation key ↔ Zotero key lookup")
+    lookup.add_argument("identifier", help="Citation key by default; use --zotero-key for reverse lookup")
+    lookup.add_argument(
+        "--zotero-key",
+        action="store_true",
+        help="Treat IDENTIFIER as a Zotero item key and return its Better BibTeX citation key",
+    )
 
     sync = sub.add_parser("sync", help="Sync status")
     sync.add_argument("action", choices=["status", "last"])
@@ -465,6 +485,7 @@ def main() -> None:
         "rename-pdfs": cmd_rename_pdfs,
         "extract-text": cmd_extract_text,
         "update-dois": cmd_update_dois,
+        "lookup": cmd_lookup,
         "sync": cmd_sync,
     }
 

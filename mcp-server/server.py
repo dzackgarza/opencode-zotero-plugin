@@ -326,10 +326,7 @@ def zotero_rename_pdf_attachments(
 def zotero_extract_and_attach_text(
     item_key: Annotated[str, Field(description="Parent Zotero item key")],
 ) -> dict:
-    """Use when you need to extract text from a PDF attachment and upload it as a .txt child.
-
-    Requires pdftotext (poppler-utils) installed on the server host.
-    """
+    """Use when you need to extract Markdown text from a PDF attachment and attach it to the item."""
     return extract_and_attach_text(_zot(), item_key)
 
 
