@@ -10,8 +10,8 @@ from pydantic import Field
 sys.path.insert(0, str(Path(__file__).parent.parent / "python" / "src"))
 
 from zotero_librarian.attachments import extract_and_attach_text, rename_pdf_attachments
-from zotero_librarian.batch import batch_delete_items
-from zotero_librarian.cleanup import clean_missing_pdfs, delete_all_notes, delete_snapshots
+from zotero_librarian.batch import batch_trash_items
+from zotero_librarian.cleanup import clean_missing_pdfs, trash_all_notes, trash_snapshots
 from zotero_librarian.client import count_items, get_zotero
 from zotero_librarian.duplicates import duplicate_dois, duplicate_titles, find_fuzzy_duplicates_by_title
 from zotero_librarian.enrichment import (
@@ -24,7 +24,7 @@ from zotero_librarian.enrichment import (
 )
 from zotero_librarian.export import export_collection, export_to_bibtex, export_to_csljson, export_to_csv, export_to_json, export_to_ris
 from zotero_librarian.import_ import import_by_doi, import_by_isbn, import_by_pmid
-from zotero_librarian.items import add_tags_to_item, delete_item, move_item_to_collection, remove_tags_from_item, update_item_fields
+from zotero_librarian.items import add_tags_to_item, move_item_to_collection, remove_tags_from_item, trash_item, update_item_fields
 from zotero_librarian.query import (
     all_tags,
     find_notes,
@@ -212,11 +212,11 @@ def zotero_export(
 
 
 @mcp.tool()
-def zotero_delete_items(item_keys: Annotated[list[str], Field(description="Item keys to move to trash")]) -> dict:
+def zotero_trash_items(item_keys: Annotated[list[str], Field(description="Item keys to move to trash")]) -> dict:
     """Use when you need to move one or more Zotero items to trash."""
     if len(item_keys) == 1:
-        return delete_item(_zot(), item_keys[0])
-    return batch_delete_items(_zot(), item_keys)
+        return trash_item(_zot(), item_keys[0])
+    return batch_trash_items(_zot(), item_keys)
 
 
 @mcp.tool()
@@ -305,9 +305,9 @@ def zotero_cleanup(
     """
     zot = _zot()
     if action == "snapshots":
-        return delete_snapshots(zot, dry_run=dry_run)
+        return trash_snapshots(zot, dry_run=dry_run)
     if action == "notes":
-        return delete_all_notes(zot, dry_run=dry_run)
+        return trash_all_notes(zot, dry_run=dry_run)
     if action == "missing_pdfs":
         return clean_missing_pdfs(zot, dry_run=dry_run, storage_root=storage_root)
     return {"error": f"Unknown action: {action}"}

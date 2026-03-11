@@ -15,7 +15,7 @@
     "zotero_collections": "allow",
     "zotero_children": "allow",
     "zotero_batch_add": "allow",
-    "zotero_delete_items": "allow",
+    "zotero_trash_items": "allow",
     "zotero_check_pdfs": "allow",
     "zotero_crossref": "allow",
     "zotero_find_dois": "allow",

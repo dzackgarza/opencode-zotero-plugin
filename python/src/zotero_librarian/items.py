@@ -420,12 +420,12 @@ def add_citation_relation(zot: zotero.Zotero, item_key: str, relation_type: str,
     )
 
 
-def delete_item(zot: zotero.Zotero, item_key: str) -> dict:
+def trash_item(zot: zotero.Zotero, item_key: str) -> dict:
     """Move an item to trash.
 
     Args:
         zot: Zotero client
-        item_key: Key of item to delete
+        item_key: Key of item to trash
 
     Returns:
         Response from Zotero API
@@ -436,11 +436,11 @@ def delete_item(zot: zotero.Zotero, item_key: str) -> dict:
     try:
         get_item(zot, item_key)
     except Exception as exc:
-        return result_from_exception("delete_item", exc)
+        return result_from_exception("trash_item", exc)
     return local_write(
         "trash_item",
         payload={"item_key": item_key},
-        operation="delete_item",
+        operation="trash_item",
     )
 
 
@@ -647,7 +647,7 @@ def merge_items(zot: zotero.Zotero, source_key: str, target_key: str) -> dict:
 
     Args:
         zot: Zotero client
-        source_key: Key of the source item (will be merged and deleted)
+        source_key: Key of the source item (will be merged and trashed)
         target_key: Key of the target item (will receive all data)
 
     Returns:

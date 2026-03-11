@@ -105,7 +105,7 @@ def cmd_children(args) -> None:
 
 
 def cmd_collections(args) -> None:
-    from .collections import create_collection, delete_collection, move_collection, rename_collection
+    from .collections import create_collection, move_collection, rename_collection, trash_collection
     from .items import add_item_to_collection, move_item_to_collection
     from .query import get_collections
 
@@ -114,8 +114,8 @@ def cmd_collections(args) -> None:
         _print(get_collections(zot))
     elif args.action == "create":
         _print(create_collection(zot, args.name, args.parent))
-    elif args.action == "delete":
-        _print(delete_collection(zot, args.key))
+    elif args.action == "trash":
+        _print(trash_collection(zot, args.key))
     elif args.action == "rename":
         _print(rename_collection(zot, args.key, args.name))
     elif args.action == "move-item":
@@ -216,15 +216,15 @@ def cmd_update(args) -> None:
     _print(update_item_fields(_zot(), args.key, json.loads(args.fields_json)))
 
 
-def cmd_delete(args) -> None:
-    from .batch import batch_delete_items
-    from .items import delete_item
+def cmd_trash(args) -> None:
+    from .batch import batch_trash_items
+    from .items import trash_item
 
     zot = _zot()
     if len(args.keys) == 1:
-        _print(delete_item(zot, args.keys[0]))
+        _print(trash_item(zot, args.keys[0]))
     else:
-        _print(batch_delete_items(zot, args.keys))
+        _print(batch_trash_items(zot, args.keys))
 
 
 def cmd_check_pdfs(_args) -> None:
@@ -271,14 +271,14 @@ def cmd_fetch_pdfs(args) -> None:
 
 
 def cmd_cleanup(args) -> None:
-    from .cleanup import clean_missing_pdfs, delete_all_notes, delete_snapshots
+    from .cleanup import clean_missing_pdfs, trash_all_notes, trash_snapshots
 
     zot = _zot()
     dry_run = not args.apply
     if args.action == "snapshots":
-        _print(delete_snapshots(zot, dry_run=dry_run))
+        _print(trash_snapshots(zot, dry_run=dry_run))
     elif args.action == "notes":
-        _print(delete_all_notes(zot, dry_run=dry_run))
+        _print(trash_all_notes(zot, dry_run=dry_run))
     elif args.action == "missing-pdfs":
         _print(clean_missing_pdfs(zot, dry_run=dry_run, storage_root=args.storage_root))
 
@@ -371,11 +371,11 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("key", help="Item key")
     update.add_argument("fields_json", help='Fields as JSON, e.g. \'{"title": "New Title"}\'')
 
-    delete = sub.add_parser("delete", help="Move one or more items to trash")
-    delete.add_argument("keys", nargs="+", help="Item key(s)")
+    trash = sub.add_parser("trash", help="Move one or more items to trash")
+    trash.add_argument("keys", nargs="+", help="Item key(s)")
 
     collections = sub.add_parser("collections", help="Collection management")
-    collections.add_argument("action", choices=["list", "create", "delete", "rename", "move-item", "add-item", "move"])
+    collections.add_argument("action", choices=["list", "create", "trash", "rename", "move-item", "add-item", "move"])
     collections.add_argument("--key", help="Collection key")
     collections.add_argument("--name", help="Collection name")
     collections.add_argument("--parent", help="Parent collection key")
@@ -471,7 +471,7 @@ def main() -> None:
         "get": cmd_get,
         "children": cmd_children,
         "update": cmd_update,
-        "delete": cmd_delete,
+        "trash": cmd_trash,
         "collections": cmd_collections,
         "tags": cmd_tags,
         "import": cmd_import,

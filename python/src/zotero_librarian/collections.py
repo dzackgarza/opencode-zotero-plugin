@@ -54,13 +54,13 @@ def create_collection(zot: zotero.Zotero, name: str, parent_key: str = None) -> 
     )
 
 
-def delete_collection(zot: zotero.Zotero, collection_key: str) -> dict[str, Any]:
-    """Delete a collection (moves to trash)."""
+def trash_collection(zot: zotero.Zotero, collection_key: str) -> dict[str, Any]:
+    """Move a collection to trash."""
     try:
         collection = _get_collection(zot, collection_key)
     except Exception as exc:
-        return result_from_exception("delete_collection", exc)
-    return _trash_write_result("delete_collection", **_collection_details(collection))
+        return result_from_exception("trash_collection", exc)
+    return _trash_write_result("trash_collection", **_collection_details(collection))
 
 
 def rename_collection(zot: zotero.Zotero, collection_key: str, new_name: str) -> dict[str, Any]:
