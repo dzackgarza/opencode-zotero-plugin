@@ -7,6 +7,7 @@ dependencies = [
     "pyzotero>=1.10.0",
     "httpx>=0.25.0",
     "rapidfuzz>=3.0.0",
+    "PyYAML>=6.0.2",
 ]
 
 [project.optional-dependencies]

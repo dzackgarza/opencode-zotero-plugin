@@ -4,7 +4,14 @@ Adversarial Integration Tests for Zotero Librarian Toolkit
 These tests use the REAL Zotero local API (no mocks) to verify robustness
 against edge cases, invalid inputs, and adversarial scenarios.
 
-All tests use a single test item created at session start and deleted at end.
+Threat model:
+    - The adversary is the caller or agent using the tool surface.
+    - This suite should test tool-contract misuse, bad sequencing, and
+      structured failure behavior against a real Zotero.
+    - This suite should not try to re-prove Zotero's own schema or field
+      validation with pathological metadata values.
+
+All tests use a single test item created at session start and trashed at end.
 Tests are idempotent and clean up after themselves.
 
 Requirements:
@@ -14,6 +21,7 @@ Requirements:
 """
 
 import pytest
+from copy import deepcopy
 import time
 from typing import Any
 from uuid import uuid4
@@ -25,10 +33,10 @@ from zotero_librarian.query import get_item, get_notes, get_attachments, get_cit
 from zotero_librarian.items import (
     update_item_fields, add_tags_to_item, remove_tags_from_item,
     move_item_to_collection, add_item_to_collection, remove_item_from_collection,
-    attach_note, add_citation_relation, delete_item,
+    attach_note, add_citation_relation, trash_item,
 )
-from zotero_librarian.notes import update_note, delete_note
-from zotero_librarian.collections import create_collection, delete_collection, rename_collection
+from zotero_librarian.notes import trash_note, update_note
+from zotero_librarian.collections import create_collection, rename_collection, trash_collection
 from zotero_librarian.tags import merge_tags, rename_tag, delete_tag
 from zotero_librarian.validation import validate_doi, validate_isbn, validate_issn
 
@@ -36,6 +44,38 @@ from zotero_librarian.validation import validate_doi, validate_isbn, validate_is
 # =============================================================================
 # Test Fixtures
 # =============================================================================
+
+TEST_ITEM_BASE_FIELDS = {
+    "itemType": "book",
+    "title": "Test Item - DO NOT EDIT MANUALLY",
+    "creators": [
+        {"creatorType": "author", "firstName": "Test", "lastName": "User"}
+    ],
+    "date": "2024",
+    "publisher": "Test Publisher",
+    "place": "Test City",
+    "ISBN": "978-0-00-000000-0",
+    "abstractNote": "Test abstract for adversarial testing",
+    "url": "https://example.com/test",
+    "accessDate": "2024-01-01",
+    "pages": "1-100",
+    "numberOfPages": "100",
+    "language": "en",
+    "libraryCatalog": "Test Catalog",
+    "callNumber": "TEST123",
+    "rights": "CC0",
+    "extra": "Test extra field",
+    "series": "Test Series",
+    "seriesNumber": "1",
+    "volume": "1",
+    "edition": "1st",
+    "shortTitle": "Test",
+}
+
+TEST_ITEM_BASE_TAGS: list[str] = []
+TEST_ITEM_BASE_COLLECTIONS: list[str] = []
+TEST_ITEM_BASE_RELATIONS: dict[str, str | list[str]] = {}
+
 
 def check_zotero_available():
     """Check if Zotero local API is available."""
@@ -64,25 +104,25 @@ def _note_key(result: dict[str, Any]) -> str:
     return key
 
 
-def _restore_item_state(zot, item_key: str, original_data: dict[str, Any]) -> None:
-    tag_names = [
-        tag.get("tag", "").strip()
-        for tag in original_data["tags"]
-        if tag.get("tag", "").strip()
-    ]
+def _restore_item_state(zot, item_key: str) -> None:
+    local_write(
+        "update_item_fields",
+        payload={"item_key": item_key, "fields": deepcopy(TEST_ITEM_BASE_FIELDS)},
+        operation="test_restore_item_state_fields",
+    )
     local_write(
         "set_item_tags",
-        payload={"item_key": item_key, "tags": tag_names},
+        payload={"item_key": item_key, "tags": TEST_ITEM_BASE_TAGS},
         operation="test_restore_item_state_tags",
     )
     local_write(
         "set_item_collections",
-        payload={"item_key": item_key, "collection_keys": list(original_data["collections"])},
+        payload={"item_key": item_key, "collection_keys": TEST_ITEM_BASE_COLLECTIONS},
         operation="test_restore_item_state_collections",
     )
     local_write(
         "update_item_fields",
-        payload={"item_key": item_key, "fields": {"relations": original_data["relations"]}},
+        payload={"item_key": item_key, "fields": {"relations": TEST_ITEM_BASE_RELATIONS}},
         operation="test_restore_item_state_relations",
     )
 
@@ -101,35 +141,10 @@ def zot():
 def test_item(zot):
     """
     Create a test item at session start that serves as sandbox for all tests.
-    This item is deleted at session end.
+    This item is trashed at session end.
     """
     # Create a simple book item as our test sandbox
-    item_data = {
-        "itemType": "book",
-        "title": "Test Item - DO NOT EDIT MANUALLY",
-        "creators": [
-            {"creatorType": "author", "firstName": "Test", "lastName": "User"}
-        ],
-        "date": "2024",
-        "publisher": "Test Publisher",
-        "place": "Test City",
-        "ISBN": "978-0-00-000000-0",
-        "abstractNote": "Test abstract for adversarial testing",
-        "url": "https://example.com/test",
-        "accessDate": "2024-01-01",
-        "pages": "1-100",
-        "numberOfPages": "100",
-        "language": "en",
-        "libraryCatalog": "Test Catalog",
-        "callNumber": "TEST123",
-        "rights": "CC0",
-        "extra": "Test extra field",
-        "series": "Test Series",
-        "seriesNumber": "1",
-        "volume": "1",
-        "edition": "1st",
-        "shortTitle": "Test",
-    }
+    item_data = deepcopy(TEST_ITEM_BASE_FIELDS)
 
     # Create the item
     result = save_item(
@@ -146,7 +161,7 @@ def test_item(zot):
     yield item_key
 
     try:
-        delete_item(zot, item_key)
+        trash_item(zot, item_key)
     except Exception:
         pass
 
@@ -155,23 +170,15 @@ def test_item(zot):
 def restore_item_state(zot, test_item):
     """
     Fixture to restore test item state after each test.
-    Captures original state before test and restores it after.
+    Restores the shared sandbox item to its baseline state after each test.
     """
-    # Capture original state
-    original = get_item(zot, test_item)
-    original_data = {
-        "tags": original["data"].get("tags", []),
-        "collections": original["data"].get("collections", []),
-        "relations": original["data"].get("relations", {}),
-    }
-
     yield
 
-    # Restore original state
+    # Restore the baseline sandbox state
     try:
-        _restore_item_state(zot, test_item, original_data)
+        _restore_item_state(zot, test_item)
     except Exception:
-        pass  # Item may have been deleted
+        pass  # Item may already be trashed
 
 
 @pytest.fixture
@@ -182,7 +189,7 @@ def temp_collection(zot):
         collection_key = _collection_key(result)
         yield collection_key
         try:
-            delete_collection(zot, collection_key)
+            trash_collection(zot, collection_key)
         except Exception:
             pass
     else:
@@ -200,25 +207,25 @@ class TestEdgeCasesEmptyStrings:
         """Empty string in title field should be accepted by Zotero."""
         result = update_item_fields(zot, test_item, {"title": ""})
         assert result["success"], "Empty title update should succeed"
-        # Verify item still exists with empty title
+        # Zotero clears the field and may omit the key entirely on read-back.
         item = get_item(zot, test_item)
-        assert item["data"]["title"] == "", f"Expected empty title, got: {item['data']['title']!r}"
+        assert item["data"].get("title", "") == "", f"Expected cleared title, got: {item['data'].get('title', '<missing>')!r}"
 
     def test_update_with_empty_abstract(self, zot, test_item, restore_item_state):
         """Empty string in abstract field should be accepted by Zotero."""
         result = update_item_fields(zot, test_item, {"abstractNote": ""})
         assert result["success"], "Empty abstract update should succeed"
-        # Read back and verify empty abstract was stored
+        # Zotero clears the field and may omit the key entirely on read-back.
         item = get_item(zot, test_item)
-        assert item["data"]["abstractNote"] == "", f"Expected empty abstract, got: {item['data']['abstractNote']!r}"
+        assert item["data"].get("abstractNote", "") == "", f"Expected cleared abstract, got: {item['data'].get('abstractNote', '<missing>')!r}"
 
     def test_update_with_empty_publisher(self, zot, test_item, restore_item_state):
         """Empty string in publisher field should be accepted by Zotero."""
         result = update_item_fields(zot, test_item, {"publisher": ""})
         assert result["success"], "Empty publisher update should succeed"
-        # Read back and verify empty publisher was stored
+        # Zotero clears the field and may omit the key entirely on read-back.
         item = get_item(zot, test_item)
-        assert item["data"]["publisher"] == "", f"Expected empty publisher, got: {item['data']['publisher']!r}"
+        assert item["data"].get("publisher", "") == "", f"Expected cleared publisher, got: {item['data'].get('publisher', '<missing>')!r}"
 
     def test_add_empty_tag(self, zot, test_item, restore_item_state):
         """Adding empty string as tag should be ignored."""
@@ -258,8 +265,9 @@ class TestEdgeCasesNoneValues:
         
         # Read back to see how Zotero handles None
         item = get_item(zot, test_item)
-        # Zotero may keep original or set to empty - both are acceptable
-        assert item["data"]["title"] in (original_title, ""), f"Title should be unchanged or empty, got: {item['data']['title']!r}"
+        # Zotero may keep the original value or clear the field entirely.
+        observed_title = item["data"].get("title", "")
+        assert observed_title in (original_title, ""), f"Title should be unchanged or cleared, got: {observed_title!r}"
 
     def test_update_with_none_date(self, zot, test_item, restore_item_state):
         """None value in date field should be handled gracefully."""
@@ -267,8 +275,9 @@ class TestEdgeCasesNoneValues:
         assert result["success"], "None date update should not crash"
         # Read back and verify date was cleared or kept
         item = get_item(zot, test_item)
-        # Zotero may clear the date or keep original - both acceptable
-        assert item["data"]["date"] in ("2024", ""), f"Date should be original or empty, got: {item['data']['date']!r}"
+        # Zotero may keep the original value or clear the field entirely.
+        observed_date = item["data"].get("date", "")
+        assert observed_date in ("2024", ""), f"Date should be original or cleared, got: {observed_date!r}"
 
     def test_update_with_none_fields_dict(self, zot, test_item, restore_item_state):
         """Multiple None values in fields dict should be handled gracefully."""
@@ -280,14 +289,20 @@ class TestEdgeCasesNoneValues:
         assert result["success"], "Multiple None fields update should not crash"
         # Read back and verify fields were handled
         item = get_item(zot, test_item)
-        # All fields should be either original values or empty
-        assert item["data"]["title"] in ("Test Item - DO NOT EDIT MANUALLY", ""), "Title handling incorrect"
-        assert item["data"]["publisher"] in ("Test Publisher", ""), "Publisher handling incorrect"
+        # All fields should be either original values or cleared from the payload.
+        assert item["data"].get("title", "") in ("Test Item - DO NOT EDIT MANUALLY", ""), "Title handling incorrect"
+        assert item["data"].get("publisher", "") in ("Test Publisher", ""), "Publisher handling incorrect"
 
     def test_add_none_tag(self, zot, test_item, restore_item_state):
-        """None in tags list should raise TypeError or be rejected."""
-        with pytest.raises((TypeError, ValueError)):
-            add_tags_to_item(zot, test_item, [None])
+        """None in tags list should be rejected without mutating the item."""
+        result = add_tags_to_item(zot, test_item, [None])
+
+        assert not result["success"], result
+        assert result["stage"] == "input_validation", result
+        assert result["details"]["tags"] == [None], result
+
+        item = get_item(zot, test_item)
+        assert item["data"].get("tags", []) == [], item["data"].get("tags", [])
 
 
 class TestEdgeCasesUnicode:
@@ -399,12 +414,12 @@ class TestEdgeCasesSpecialCharacters:
         assert item["data"]["title"] == expected, f"Backslashes not preserved: expected {expected!r}, got {item['data']['title']!r}"
 
     def test_title_with_newlines(self, zot, test_item, restore_item_state):
-        """Title with newlines should be stored correctly."""
-        expected = "Line1\nLine2\nLine3"
-        result = update_item_fields(zot, test_item, {"title": expected})
+        """Title newlines should be normalized to spaces by Zotero."""
+        submitted = "Line1\nLine2\nLine3"
+        result = update_item_fields(zot, test_item, {"title": submitted})
         assert result["success"], "Title with newlines update should succeed"
         item = get_item(zot, test_item)
-        assert item["data"]["title"] == expected, f"Newlines not preserved: expected {expected!r}, got {item['data']['title']!r}"
+        assert item["data"]["title"] == "Line1 Line2 Line3", item["data"]["title"]
 
     def test_title_with_tabs(self, zot, test_item, restore_item_state):
         """Title with tabs should be stored correctly."""
@@ -533,7 +548,7 @@ class TestInvalidInputsNonExistentKeys:
 
     def test_delete_nonexistent_item(self, zot):
         """Delete non-existent item."""
-        result = delete_item(zot, "NONEXISTENT123")
+        result = trash_item(zot, "NONEXISTENT123")
         assert not result["success"], "Delete nonexistent item should fail"
 
     def test_add_tag_to_nonexistent_item(self, zot):
@@ -686,8 +701,8 @@ class TestStateCorruption:
             assert len(item["data"].get("collections", [])) >= 2
 
             # Cleanup
-            delete_collection(zot, coll1_key)
-            delete_collection(zot, coll2_key)
+            trash_collection(zot, coll1_key)
+            trash_collection(zot, coll2_key)
 
     def test_circular_collection_reference_attempt(self, zot, test_item):
         """Try to create circular collection reference (should fail gracefully)."""
@@ -711,19 +726,19 @@ class TestStateCorruption:
 
         # Cleanup
         try:
-            delete_collection(zot, coll1_key)
+            trash_collection(zot, coll1_key)
             if coll2_result and coll2_result["success"]:
-                delete_collection(zot, _collection_key(coll2_result))
+                trash_collection(zot, _collection_key(coll2_result))
             if coll3_result and coll3_result.get("success"):
-                delete_collection(zot, _collection_key(coll3_result))
+                trash_collection(zot, _collection_key(coll3_result))
         except Exception:
             pass
 
-    def test_delete_item_then_operate(self, zot):
-        """Try to operate on deleted item."""
+    def test_trash_item_then_operate(self, zot):
+        """Try to operate on a trashed item."""
         item_data = {
             "itemType": "book",
-            "title": _probe_value("deleted-item"),
+            "title": _probe_value("trashed-item"),
             "creators": [{"creatorType": "author", "firstName": "Deleted", "lastName": "Probe"}],
             "date": "2026",
             "publisher": "OpenCode Test Harness",
@@ -732,12 +747,12 @@ class TestStateCorruption:
             zot,
             item_data,
             uri=f"https://example.invalid/{uuid4().hex}",
-            operation="test_delete_item_then_operate",
+            operation="test_trash_item_then_operate",
         )
         assert result["success"], result
         item_key = result["item_key"]
-        delete_result = delete_item(zot, item_key)
-        assert delete_result["success"], delete_result
+        trash_result = trash_item(zot, item_key)
+        assert trash_result["success"], trash_result
         follow_up = update_item_fields(zot, item_key, {"title": "should not persist"})
         assert not follow_up["success"], "Updating a trashed item should fail"
 
@@ -802,26 +817,26 @@ class TestConcurrentModification:
 # =============================================================================
 
 class TestMissingDependencies:
-    """Test operations on deleted items and orphaned references."""
+    """Test operations on trashed items and orphaned references."""
 
-    def test_note_on_deleted_item(self, zot):
-        """Create note, delete parent, try to access note."""
+    def test_note_on_trashed_item(self, zot):
+        """Create note, trash parent, try to access note."""
         item_result = save_item(
             zot,
             {
                 "itemType": "book",
-                "title": _probe_value("note-deleted-parent"),
+                "title": _probe_value("note-trashed-parent"),
                 "creators": [{"creatorType": "author", "firstName": "Note", "lastName": "Probe"}],
                 "date": "2026",
                 "publisher": "OpenCode Test Harness",
             },
             uri=f"https://example.invalid/{uuid4().hex}",
-            operation="test_note_on_deleted_item",
+            operation="test_note_on_trashed_item",
         )
         assert item_result["success"], item_result
         item_key = item_result["item_key"]
-        delete_result = delete_item(zot, item_key)
-        assert delete_result["success"], delete_result
+        trash_result = trash_item(zot, item_key)
+        assert trash_result["success"], trash_result
         note_result = attach_note(zot, item_key, "should not attach")
         assert not note_result["success"], "Attaching a note to a trashed parent should fail"
 
@@ -1011,10 +1026,10 @@ class TestUnicodeHell:
             # Verify note content
             note = zot.note(note_key)
             assert content in note["data"]["note"], f"Unicode note content mismatch"
-            delete_note(zot, note_key)
+            trash_note(zot, note_key)
         except Exception:
             try:
-                delete_note(zot, note_key)
+                trash_note(zot, note_key)
             except Exception:
                 pass
             raise
@@ -1201,10 +1216,10 @@ class TestNoteOperations:
             # Verify note was created with empty content
             note = zot.note(note_key)
             assert note["data"]["note"] == "", f"Empty note content mismatch: {note['data']['note']!r}"
-            delete_note(zot, note_key)
+            trash_note(zot, note_key)
         except Exception:
             try:
-                delete_note(zot, note_key)
+                trash_note(zot, note_key)
             except Exception:
                 pass
             raise
@@ -1219,10 +1234,10 @@ class TestNoteOperations:
             # Verify note was created with HTML content
             note = zot.note(note_key)
             assert html in note["data"]["note"], f"HTML note content mismatch: {note['data']['note']!r}"
-            delete_note(zot, note_key)
+            trash_note(zot, note_key)
         except Exception:
             try:
-                delete_note(zot, note_key)
+                trash_note(zot, note_key)
             except Exception:
                 pass
             raise
@@ -1241,17 +1256,17 @@ class TestNoteOperations:
             # Verify unicode content
             note = zot.note(note_key)
             assert unicode_content in note["data"]["note"], f"Unicode note content mismatch: {note['data']['note']!r}"
-            delete_note(zot, note_key)
+            trash_note(zot, note_key)
         except Exception:
             try:
-                delete_note(zot, note_key)
+                trash_note(zot, note_key)
             except Exception:
                 pass
             raise
 
     def test_delete_nonexistent_note(self, zot):
         """Delete non-existent note should return error dict."""
-        result = delete_note(zot, "NONEXISTENT123")
+        result = trash_note(zot, "NONEXISTENT123")
         # Should return error dict with success=False
         assert not result.get("success", True), "Delete nonexistent note should fail"
 
@@ -1276,7 +1291,7 @@ class TestCollectionOperations:
             # If it succeeded, verify collection was created
             collection_key = _collection_key(result)
             try:
-                delete_collection(zot, collection_key)
+                trash_collection(zot, collection_key)
             except Exception:
                 pass
         else:
@@ -1291,7 +1306,7 @@ class TestCollectionOperations:
             # If it succeeded, verify name was stored
             collection_key = _collection_key(result)
             try:
-                delete_collection(zot, collection_key)
+                trash_collection(zot, collection_key)
             except Exception:
                 pass
         else:
@@ -1310,10 +1325,10 @@ class TestCollectionOperations:
             created = [c for c in collections if c["key"] == collection_key]
             assert len(created) == 1, "Collection should exist"
             assert created[0]["data"]["name"] == unicode_name, f"Unicode name mismatch: {created[0]['data']['name']!r}"
-            delete_collection(zot, collection_key)
+            trash_collection(zot, collection_key)
         except Exception:
             try:
-                delete_collection(zot, collection_key)
+                trash_collection(zot, collection_key)
             except Exception:
                 pass
             raise
@@ -1331,7 +1346,7 @@ class TestCollectionOperations:
 
     def test_delete_nonexistent_collection(self, zot):
         """Delete non-existent collection should return error dict."""
-        result = delete_collection(zot, "NONEXISTENT123")
+        result = trash_collection(zot, "NONEXISTENT123")
         assert not result["success"], "Delete nonexistent collection should fail"
 
     def test_rename_nonexistent_collection(self, zot):
@@ -1454,13 +1469,13 @@ class TestMiscellaneousAdversarial:
     """Additional adversarial test scenarios."""
 
     def test_rapid_collection_operations(self, zot, test_item, restore_item_state):
-        """Rapid create/move/delete collections should all succeed."""
+        """Rapid create/move/trash collections should all succeed."""
         for i in range(5):
             coll_result = create_collection(zot, f"Rapid_{i}_{time.time()}")
             assert coll_result["success"], f"Rapid collection {i} create should succeed"
             coll_key = _collection_key(coll_result)
             move_item_to_collection(zot, test_item, coll_key)
-            delete_collection(zot, coll_key)
+            trash_collection(zot, coll_key)
         # Verify item is back to original state (no collections from rapid ops)
         item = get_item(zot, test_item)
         # Collections may have other collections, but rapid ones should be gone
@@ -1519,7 +1534,7 @@ class TestMiscellaneousAdversarial:
         finally:
             for key in collection_keys:
                 try:
-                    delete_collection(zot, key)
+                    trash_collection(zot, key)
                 except Exception:
                     pass
 

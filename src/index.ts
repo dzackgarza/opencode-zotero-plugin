@@ -176,14 +176,14 @@ export const ZoteroPlugin: Plugin = async () => ({
         return JSON.stringify({ error: `Unknown action: ${args.action}` });
       },
     }),
-    zotero_delete_items: tool({
+    zotero_trash_items: tool({
       description: "Use when you need to move one or more Zotero items to trash.",
       args: {
         item_keys: tool.schema.array(tool.schema.string()).describe("Item keys to move to trash"),
       },
       async execute(args) {
-        if (args.item_keys.length === 1) return callZotero("delete_item", { item_key: args.item_keys[0] });
-        return callZotero("delete_items", { item_keys: args.item_keys });
+        if (args.item_keys.length === 1) return callZotero("trash_item", { item_key: args.item_keys[0] });
+        return callZotero("trash_items", { item_keys: args.item_keys });
       },
     }),
     zotero_check_pdfs: tool({

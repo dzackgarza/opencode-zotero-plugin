@@ -36,6 +36,14 @@ def _has_pdf(children: list[dict]) -> bool:
     )
 
 
+def _ris_exportable_items(items: list[dict]) -> list[dict]:
+    return [
+        item
+        for item in items
+        if item["data"].get("itemType") not in {"attachment", "note"}
+    ]
+
+
 class TestEnrichmentLocalApi:
     def test_get_children_matches_local_api(self, zot, first_item):
         assert [child["key"] for child in get_children(zot, first_item["key"])] == [
@@ -76,6 +84,7 @@ class TestEnrichmentLocalApi:
     def test_export_to_ris_contains_known_item_title(self, zot, sample_collection, sample_collection_items):
         item = _first_titled_item(sample_collection_items)
         exported = export_to_ris(zot, collection_key=sample_collection["key"])
+        exportable_items = _ris_exportable_items(sample_collection_items)
 
         assert item["data"]["title"] in exported
-        assert exported.count("TY  -") == len(sample_collection_items)
+        assert exported.count("TY  -") == len(exportable_items)

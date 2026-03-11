@@ -15,8 +15,13 @@ Tests, live proofs, and other gates apply after the required implementation chec
 1. Use the local Zotero surfaces only.
    Reads come from `http://127.0.0.1:23119/api/...`.
    Writes come from local desktop surfaces such as `http://127.0.0.1:23119/connector/...`
-   and installed local plugin endpoints such as `http://127.0.0.1:23119/fulltext-attach`
-   and `http://127.0.0.1:23119/opencode-zotero-write`.
+   and the installed local add-on endpoints described in
+   `python/src/zotero_librarian/config.yaml` and reported by the add-on version probe.
+1. The local add-on is part of the owned stack.
+   If a release-gating bug is in the add-on, fix the add-on at the source and
+   update the client contract or version gate as needed.
+   Do not treat owned add-on bugs as external blockers and do not paper them
+   over here as the final state.
 1. External enrichment remains allowed.
    Crossref, PubMed, Unpaywall, Semantic Scholar, arXiv, and similar metadata/PDF sources are in scope.
 1. Agents must be able to write locally.
@@ -27,9 +32,9 @@ Tests, live proofs, and other gates apply after the required implementation chec
    attach PDFs and other files;
    attach markdown or note text;
    place or finalize items into collections.
-1. Deletion is not a release requirement.
-   Permanent delete is forbidden.
-   If a delete surface exists, it must mean move to trash only, and it must not claim success until the local trash path is proven.
+1. Trash is the only supported removal surface.
+   Permanent deletion is forbidden in this repo and the local add-on.
+   Any removal surface must mean move to trash only, and it must not claim success until the local trash path is proven.
 1. Silent fallbacks are forbidden.
    No broad `except Exception: pass`, no `return None` on user-facing failures, no hidden retries that erase the real failing stage.
 1. Mutating operations must return structured results end to end.
@@ -39,6 +44,11 @@ Tests, live proofs, and other gates apply after the required implementation chec
    A local write failure may not be flattened into a generic command failure.
 1. Proof must use real Zotero and real external services.
    Mocks do not satisfy completion for this refactor.
+1. Adversarial testing targets the caller, not Zotero's database.
+   Use adversarial tests to prove agent/tool-contract behavior, unsafe sequencing,
+   and failure propagation against a real Zotero.
+   Do not spend release effort re-testing Zotero's own field validation or
+   pathological stored metadata values.
 
 ## Implementation Checklist
 
@@ -51,9 +61,9 @@ Tests, live proofs, and other gates apply after the required implementation chec
 - [x] Batch/enrichment accounting no longer counts failed attachment or update attempts as success.
 - [x] Existing-item metadata edits are implemented through a local write surface.
 - [x] Existing-item tag edits are implemented through a local write surface.
-  Add, remove, rename, merge, and delete-on-item semantics.
+  Add, remove, rename, merge, and remove-tag semantics.
 - [x] Existing-item collection placement/finalization is implemented through a local write surface.
-- [x] Existing-item PDF and file attachment writes are implemented through the installed `/fulltext-attach` plugin endpoint.
+- [x] Existing-item PDF and file attachment writes are implemented through the installed add-on's configured attach endpoint.
 - [x] Existing-item link attachment writes are implemented through a local write surface.
 - [x] Existing-item markdown/note attachment writes are implemented through a local write surface.
 - [x] Existing note edits are implemented through a local write surface.

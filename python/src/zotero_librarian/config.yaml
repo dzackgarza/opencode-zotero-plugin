@@ -1,0 +1,17 @@
+connector:
+  base_url: http://127.0.0.1:23119
+  timeout_seconds: 30.0
+  poll_attempts: 20
+  poll_delay_seconds: 0.25
+plugin:
+  minimum_version: '3.1'
+  version_probe_path: /version
+  fallback_endpoints:
+    attach: /attach
+    write: /write
+  feature_minimum_versions:
+    delete_tag: 3.2.1
+fulltext_attach:
+  allowed_dirs:
+  - /tmp
+  - /var/tmp

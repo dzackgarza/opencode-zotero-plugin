@@ -53,14 +53,14 @@ def update_note(zot: zotero.Zotero, note_key: str, new_content: str) -> dict[str
     )
 
 
-def delete_note(zot: zotero.Zotero, note_key: str) -> dict[str, Any]:
-    """Delete a note from Zotero."""
+def trash_note(zot: zotero.Zotero, note_key: str) -> dict[str, Any]:
+    """Move a note to trash."""
     try:
-        note = _get_note(zot, note_key, operation="delete_note")
+        note = _get_note(zot, note_key, operation="trash_note")
     except Exception as exc:
-        return result_from_exception("delete_note", exc)
+        return result_from_exception("trash_note", exc)
     return _trash_write_result(
-        "delete_note",
+        "trash_note",
         note_key=note_key,
         parent_item_key=note.get("data", {}).get("parentItem"),
     )

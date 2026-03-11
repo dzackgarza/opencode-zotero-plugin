@@ -8,15 +8,23 @@ from typing import Any
 import httpx
 from pyzotero import zotero
 
+from .settings import (
+    connector_base_url,
+    connector_poll_attempts,
+    connector_poll_delay_seconds,
+    connector_timeout_seconds,
+    plugin_fallback_endpoint_path,
+    plugin_minimum_version,
+    plugin_version_probe_path,
+)
 
-CONNECTOR_BASE_URL = "http://127.0.0.1:23119"
-CONNECTOR_TIMEOUT = 30.0
-CONNECTOR_POLL_ATTEMPTS = 20
-CONNECTOR_POLL_DELAY = 0.25
-FULLTEXT_ATTACH_PATH = "/fulltext-attach"
-LOCAL_WRITE_PATH = "/opencode-zotero-write"
-PLUGIN_VERSION_PATH = "/opencode-zotero-plugin-version"
-MIN_LOCAL_PLUGIN_VERSION = "3.1"
+
+CONNECTOR_BASE_URL = connector_base_url()
+CONNECTOR_TIMEOUT = connector_timeout_seconds()
+CONNECTOR_POLL_ATTEMPTS = connector_poll_attempts()
+CONNECTOR_POLL_DELAY = connector_poll_delay_seconds()
+PLUGIN_VERSION_PATH = plugin_version_probe_path()
+MIN_LOCAL_PLUGIN_VERSION = plugin_minimum_version()
 
 
 class ConnectorWriteError(RuntimeError):
@@ -71,6 +79,19 @@ def result_from_exception(operation: str, exc: Exception) -> dict[str, Any]:
 
 def endpoint_url(path: str) -> str:
     return f"{CONNECTOR_BASE_URL}{path}"
+
+
+def plugin_endpoint_path(plugin_info: dict[str, Any], endpoint_name: str) -> str:
+    endpoints = plugin_info.get("endpoints")
+    if isinstance(endpoints, dict):
+        endpoint_path = endpoints.get(endpoint_name)
+        if isinstance(endpoint_path, str) and endpoint_path.startswith("/"):
+            return endpoint_path
+    return plugin_fallback_endpoint_path(endpoint_name)
+
+
+def plugin_endpoint_url(plugin_info: dict[str, Any], endpoint_name: str) -> str:
+    return endpoint_url(plugin_endpoint_path(plugin_info, endpoint_name))
 
 
 def _parse_release_version(version: str) -> tuple[int, ...]:
@@ -486,8 +507,9 @@ def local_write(
     except ConnectorWriteError as exc:
         return exc.to_dict()
 
+    write_path = plugin_endpoint_path(plugin_info, "write")
     response = _post_json(
-        LOCAL_WRITE_PATH,
+        write_path,
         request_payload,
         operation=result_operation,
         stage="local_write_request",
@@ -496,9 +518,10 @@ def local_write(
         return error_result(
             result_operation,
             "local_write_endpoint",
-            "The /opencode-zotero-write Zotero plugin endpoint is not available.",
+            "The configured local write endpoint is not available.",
             details={
                 "endpoint_operation": endpoint_operation,
+                "endpoint": write_path,
                 "status_code": response.status_code,
                 "body": response.text,
             },

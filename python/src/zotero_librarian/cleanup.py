@@ -10,10 +10,10 @@ from typing import Any
 from pyzotero import zotero
 
 from .client import _all_items
-from .items import delete_item
+from .items import trash_item
 
 
-def delete_snapshots(
+def trash_snapshots(
     zot: zotero.Zotero,
     *,
     dry_run: bool = True,
@@ -30,9 +30,9 @@ def delete_snapshots(
     Returns:
         Dict with:
             - dry_run: bool
-            - count: number of snapshots found (or deleted when dry_run=False)
+            - count: number of snapshots found (or trashed when dry_run=False)
             - items: list of dicts with 'key', 'title', 'filename', 'contentType'
-            - results: list of delete operation results (empty when dry_run=True)
+            - results: list of trash operation results (empty when dry_run=True)
     """
     snapshots: list[dict[str, Any]] = []
 
@@ -61,7 +61,7 @@ def delete_snapshots(
     results: list[dict[str, Any]] = []
     if not dry_run:
         for snap in snapshots:
-            result = delete_item(zot, snap["key"])
+            result = trash_item(zot, snap["key"])
             results.append({"key": snap["key"], **result})
 
     return {
@@ -72,7 +72,7 @@ def delete_snapshots(
     }
 
 
-def delete_all_notes(
+def trash_all_notes(
     zot: zotero.Zotero,
     *,
     dry_run: bool = True,
@@ -86,9 +86,9 @@ def delete_all_notes(
     Returns:
         Dict with:
             - dry_run: bool
-            - count: number of notes found (or deleted when dry_run=False)
+            - count: number of notes found (or trashed when dry_run=False)
             - items: list of dicts with 'key', 'parent_key', 'snippet'
-            - results: list of delete operation results (empty when dry_run=True)
+            - results: list of trash operation results (empty when dry_run=True)
     """
     import re
 
@@ -110,7 +110,7 @@ def delete_all_notes(
     results: list[dict[str, Any]] = []
     if not dry_run:
         for note_info in notes:
-            result = delete_item(zot, note_info["key"])
+            result = trash_item(zot, note_info["key"])
             results.append({"key": note_info["key"], **result})
 
     return {
@@ -141,9 +141,9 @@ def clean_missing_pdfs(
     Returns:
         Dict with:
             - dry_run: bool
-            - count: number of dangling records found (or deleted when dry_run=False)
+            - count: number of dangling records found (or trashed when dry_run=False)
             - items: list of dicts with 'key', 'filename', 'expected_path'
-            - results: list of delete operation results (empty when dry_run=True)
+            - results: list of trash operation results (empty when dry_run=True)
     """
     if storage_root is None:
         base = Path.home() / "Zotero" / "storage"
@@ -180,7 +180,7 @@ def clean_missing_pdfs(
     results: list[dict[str, Any]] = []
     if not dry_run:
         for record in dangling:
-            result = delete_item(zot, record["key"])
+            result = trash_item(zot, record["key"])
             results.append({"key": record["key"], **result})
 
     return {

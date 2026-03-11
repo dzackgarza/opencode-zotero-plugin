@@ -12,7 +12,7 @@ from .items import (
     add_tags_to_item,
     remove_tags_from_item,
     move_item_to_collection,
-    delete_item,
+    trash_item,
 )
 
 
@@ -119,7 +119,7 @@ def batch_move_to_collection(
     return result
 
 
-def batch_delete_items(
+def batch_trash_items(
     zot: zotero.Zotero,
     item_keys: list[str]
 ) -> dict[str, list[str]]:
@@ -127,7 +127,7 @@ def batch_delete_items(
 
     Args:
         zot: Zotero client
-        item_keys: List of item keys to delete
+        item_keys: List of item keys to trash
 
     Returns:
         Dict with "success" and "failed" lists of item keys
@@ -138,7 +138,7 @@ def batch_delete_items(
     result = {"success": [], "failed": []}
     for item_key in item_keys:
         try:
-            _record_batch_result(result, item_key, delete_item(zot, item_key))
+            _record_batch_result(result, item_key, trash_item(zot, item_key))
         except Exception:
             result["failed"].append(item_key)
     return result

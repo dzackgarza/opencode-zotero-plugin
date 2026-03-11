@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from uuid import uuid4
 
 import pytest
 
 from zotero_librarian.attachments import upload_pdf
-from zotero_librarian.batch import batch_delete_items, batch_update_items
+from zotero_librarian.batch import batch_trash_items, batch_update_items
 from zotero_librarian.collections import (
     create_collection as create_collection_entry,
-    delete_collection as delete_collection_entry,
     move_collection,
     rename_collection,
+    trash_collection as trash_collection_entry,
 )
 from zotero_librarian.connector import resolve_target_id, save_item
 from zotero_librarian.enrichment import batch_add_identifiers
@@ -21,14 +22,14 @@ from zotero_librarian.items import (
     add_tags_to_item,
     attach_note,
     attach_url,
-    delete_item,
     move_item_to_collection,
     remove_item_from_collection,
     remove_tags_from_item,
+    trash_item,
     update_item_fields,
 )
-from zotero_librarian.notes import delete_note, update_note
-from zotero_librarian.query import get_attachments, get_item, get_notes, get_trash_items
+from zotero_librarian.notes import trash_note, update_note
+from zotero_librarian.query import get_attachments, get_item, get_notes
 from zotero_librarian.tags import delete_tag, merge_tags, rename_tag
 
 
@@ -62,8 +63,14 @@ def _tag_names(item: dict) -> list[str]:
     ]
 
 
-def _trash_keys(zot) -> set[str]:
-    return {item["key"] for item in get_trash_items(zot)}
+def _is_trashed(zot, item_key: str) -> bool:
+    deadline = time.monotonic() + 5.0
+    while True:
+        if bool(zot.item(item_key).get("data", {}).get("deleted", False)):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.25)
 
 
 def _collection_key(result: dict) -> str:
@@ -109,12 +116,12 @@ class WriteSandbox:
     def cleanup(self) -> None:
         for item_key in reversed(self.item_keys):
             try:
-                delete_item(self.zot, item_key)
+                trash_item(self.zot, item_key)
             except Exception:
                 pass
         for collection_key in reversed(self.collection_keys):
             try:
-                delete_collection_entry(self.zot, collection_key)
+                trash_collection_entry(self.zot, collection_key)
             except Exception:
                 pass
 
@@ -265,23 +272,23 @@ def test_attach_and_update_note_round_trip(zot, sandbox):
     assert any(note["key"] == note_key and updated_content in note["data"].get("note", "") for note in updated_notes)
 
 
-def test_delete_note_moves_note_to_trash(zot, sandbox):
+def test_trash_note_marks_note_as_deleted(zot, sandbox):
     item_key = sandbox.create_item()
     note_key = attach_note(zot, item_key, "<p>trash me</p>")["note_key"]
 
-    result = delete_note(zot, note_key)
+    result = trash_note(zot, note_key)
 
     assert result["success"] is True
-    assert note_key in _trash_keys(zot)
+    assert _is_trashed(zot, note_key)
 
 
-def test_delete_item_moves_item_to_trash(zot, sandbox):
+def test_trash_item_marks_item_as_deleted(zot, sandbox):
     item_key = sandbox.create_item()
 
-    result = delete_item(zot, item_key)
+    result = trash_item(zot, item_key)
 
     assert result["success"] is True
-    assert item_key in _trash_keys(zot)
+    assert _is_trashed(zot, item_key)
 
 
 def test_batch_update_items_persists_changes_to_all_targets(zot, sandbox):
@@ -296,15 +303,14 @@ def test_batch_update_items_persists_changes_to_all_targets(zot, sandbox):
         assert get_item(zot, item_key)["data"]["shortTitle"] == short_title
 
 
-def test_batch_delete_items_moves_all_targets_to_trash(zot, sandbox):
-    item_keys = [sandbox.create_item(title_prefix="batch-delete-a"), sandbox.create_item(title_prefix="batch-delete-b")]
+def test_batch_trash_items_marks_all_targets_as_deleted(zot, sandbox):
+    item_keys = [sandbox.create_item(title_prefix="batch-trash-a"), sandbox.create_item(title_prefix="batch-trash-b")]
 
-    result = batch_delete_items(zot, item_keys)
+    result = batch_trash_items(zot, item_keys)
 
     assert sorted(result["success"]) == sorted(item_keys)
     assert result["failed"] == []
-    trash_keys = _trash_keys(zot)
-    assert set(item_keys) <= trash_keys
+    assert all(_is_trashed(zot, item_key) for item_key in item_keys)
 
 
 def test_rename_tag_updates_existing_items(zot, sandbox):

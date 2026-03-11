@@ -4,8 +4,8 @@ import json
 import sys
 
 from .attachments import extract_and_attach_text, rename_pdf_attachments
-from .batch import batch_delete_items
-from .cleanup import clean_missing_pdfs, delete_all_notes, delete_snapshots
+from .batch import batch_trash_items
+from .cleanup import clean_missing_pdfs, trash_all_notes, trash_snapshots
 from .client import count_items, get_zotero
 from .connector import result_from_exception
 from .duplicates import duplicate_dois, duplicate_titles, find_fuzzy_duplicates_by_title
@@ -22,9 +22,9 @@ from .import_ import import_by_doi, import_by_isbn, import_by_pmid
 from .lookup import lookup, lookup_citekey, lookup_zotero_key
 from .items import (
     add_tags_to_item,
-    delete_item,
     move_item_to_collection,
     remove_tags_from_item,
+    trash_item,
     update_item_fields,
 )
 from .query import (
@@ -74,8 +74,8 @@ TOOLS = {
     "add_tags_to_item": lambda zot, a: add_tags_to_item(zot, a["item_key"], a["tags"]),
     "remove_tags_from_item": lambda zot, a: remove_tags_from_item(zot, a["item_key"], a["tags"]),
     "move_item_to_collection": lambda zot, a: move_item_to_collection(zot, a["item_key"], a["collection_key"]),
-    "delete_item": lambda zot, a: delete_item(zot, a["item_key"]),
-    "delete_items": lambda zot, a: batch_delete_items(zot, a["item_keys"]),
+    "trash_item": lambda zot, a: trash_item(zot, a["item_key"]),
+    "trash_items": lambda zot, a: batch_trash_items(zot, a["item_keys"]),
     "library_summary": lambda zot, a: library_summary(zot),
     "items_per_type": lambda zot, a: items_per_type(zot),
     "items_per_year": lambda zot, a: items_per_year(zot),
@@ -95,11 +95,11 @@ TOOLS = {
         apply=a.get("apply", False),
         limit=a.get("limit"),
     ),
-    "delete_snapshots": lambda zot, a: delete_snapshots(
+    "trash_snapshots": lambda zot, a: trash_snapshots(
         zot,
         dry_run=a.get("dry_run", True),
     ),
-    "delete_all_notes": lambda zot, a: delete_all_notes(
+    "trash_all_notes": lambda zot, a: trash_all_notes(
         zot,
         dry_run=a.get("dry_run", True),
     ),
