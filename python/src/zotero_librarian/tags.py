@@ -75,15 +75,6 @@ def _merge_details(result: dict[str, Any], **details: Any) -> dict[str, Any]:
     return merged
 
 
-def _item_has_tag(zot: zotero.Zotero, item_key: str, tag_name: str) -> bool:
-    item = zot.item(item_key)
-    return any(
-        tag.get("tag", "").strip() == tag_name
-        for tag in item.get("data", {}).get("tags", [])
-        if tag.get("tag", "").strip()
-    )
-
-
 def merge_tags(zot: zotero.Zotero, source_tags: list[str], target_tag: str) -> dict[str, Any]:
     """Merge multiple tags into one across all items."""
     normalized_sources = _normalized_tags(source_tags)

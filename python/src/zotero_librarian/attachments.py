@@ -5,6 +5,7 @@ Attachment file operations for Zotero library items.
 """
 
 import os
+import base64
 import shutil
 import tempfile
 from pathlib import Path
@@ -47,6 +48,28 @@ def _stage_file_for_fulltext_attach(file_path: Path) -> tuple[Path, bool]:
         staged_path = Path(staged_handle.name)
     shutil.copy2(file_path, staged_path)
     return staged_path, True
+
+
+def _plugin_supports_capability(plugin_info: dict[str, Any], capability: str) -> bool:
+    capabilities = plugin_info.get("capabilities")
+    return isinstance(capabilities, list) and capability in capabilities
+
+
+def _attach_bytes_payload(parent_item_key: str, source_file: Path, title: str) -> dict[str, Any]:
+    return {
+        "item_key": parent_item_key,
+        "title": title,
+        "file_name": source_file.name,
+        "file_bytes_base64": base64.b64encode(source_file.read_bytes()).decode("ascii"),
+    }
+
+
+def _is_missing_file_attach_error(response_data: dict[str, Any]) -> bool:
+    error = response_data.get("error")
+    return isinstance(error, str) and (
+        "NS_ERROR_FILE_NOT_FOUND" in error
+        or error.startswith("File not found:")
+    )
 
 
 def attach_file_to_item(
@@ -154,6 +177,48 @@ def attach_file_to_item(
                 "body": response.text,
             },
         )
+
+    if (
+        not response_data.get("success")
+        and _plugin_supports_capability(plugin_info, "attach_bytes")
+        and _is_missing_file_attach_error(response_data)
+    ):
+        try:
+            response = httpx.post(
+                attach_url,
+                json=_attach_bytes_payload(parent_item_key, source_file, title),
+                timeout=CONNECTOR_TIMEOUT,
+            )
+        except httpx.HTTPError as exc:
+            return error_result(
+                operation,
+                "fulltext_attach_request",
+                f"Request to {attach_url} failed",
+                details={
+                    "parent_item_key": parent_item_key,
+                    "file_path": file_path,
+                    "endpoint": attach_path,
+                    "staged_file_path": str(staged_path),
+                    "exception_type": type(exc).__name__,
+                    "retry_mode": "attach_bytes",
+                },
+            )
+        try:
+            response_data = response.json()
+        except ValueError:
+            return error_result(
+                operation,
+                "parse_response",
+                "The configured attach endpoint did not return valid JSON.",
+                details={
+                    "parent_item_key": parent_item_key,
+                    "file_path": file_path,
+                    "endpoint": attach_path,
+                    "status_code": response.status_code,
+                    "body": response.text,
+                    "retry_mode": "attach_bytes",
+                },
+            )
 
     if not response_data.get("success"):
         return error_result(

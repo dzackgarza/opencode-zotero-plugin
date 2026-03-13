@@ -78,14 +78,9 @@ cd mcp-server && uv run fastmcp run server.py
 ## Testing
 
 ```bash
-# Offline tests (no Zotero needed)
-cd python && uv run pytest tests/test_validation.py tests/test_dispatch.py -v
-
-# All tests (Zotero-dependent ones auto-skip when not running)
-cd python && uv run pytest tests/ -v
-
-# With live Zotero (full suite)
-cd python && uv run pytest tests/ -v --no-header
+just typecheck
+just test-import
+just test
 ```
 
 ## Prerequisites

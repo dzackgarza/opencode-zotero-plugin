@@ -11,7 +11,7 @@ Threat model:
     - This suite should not try to re-prove Zotero's own schema or field
       validation with pathological metadata values.
 
-All tests use a single test item created at session start and deleted at end.
+All tests use a single test item created at session start and trashed at end.
 Tests are idempotent and clean up after themselves.
 
 Requirements:
@@ -141,7 +141,7 @@ def zot():
 def test_item(zot):
     """
     Create a test item at session start that serves as sandbox for all tests.
-    This item is deleted at session end.
+    This item is trashed at session end.
     """
     # Create a simple book item as our test sandbox
     item_data = deepcopy(TEST_ITEM_BASE_FIELDS)
@@ -178,7 +178,7 @@ def restore_item_state(zot, test_item):
     try:
         _restore_item_state(zot, test_item)
     except Exception:
-        pass  # Item may have been deleted
+        pass  # Item may already be trashed
 
 
 @pytest.fixture
@@ -734,11 +734,11 @@ class TestStateCorruption:
         except Exception:
             pass
 
-    def test_delete_item_then_operate(self, zot):
-        """Try to operate on deleted item."""
+    def test_trash_item_then_operate(self, zot):
+        """Try to operate on a trashed item."""
         item_data = {
             "itemType": "book",
-            "title": _probe_value("deleted-item"),
+            "title": _probe_value("trashed-item"),
             "creators": [{"creatorType": "author", "firstName": "Deleted", "lastName": "Probe"}],
             "date": "2026",
             "publisher": "OpenCode Test Harness",
@@ -747,7 +747,7 @@ class TestStateCorruption:
             zot,
             item_data,
             uri=f"https://example.invalid/{uuid4().hex}",
-            operation="test_delete_item_then_operate",
+            operation="test_trash_item_then_operate",
         )
         assert result["success"], result
         item_key = result["item_key"]
@@ -817,21 +817,21 @@ class TestConcurrentModification:
 # =============================================================================
 
 class TestMissingDependencies:
-    """Test operations on deleted items and orphaned references."""
+    """Test operations on trashed items and orphaned references."""
 
-    def test_note_on_deleted_item(self, zot):
-        """Create note, delete parent, try to access note."""
+    def test_note_on_trashed_item(self, zot):
+        """Create note, trash parent, try to access note."""
         item_result = save_item(
             zot,
             {
                 "itemType": "book",
-                "title": _probe_value("note-deleted-parent"),
+                "title": _probe_value("note-trashed-parent"),
                 "creators": [{"creatorType": "author", "firstName": "Note", "lastName": "Probe"}],
                 "date": "2026",
                 "publisher": "OpenCode Test Harness",
             },
             uri=f"https://example.invalid/{uuid4().hex}",
-            operation="test_note_on_deleted_item",
+            operation="test_note_on_trashed_item",
         )
         assert item_result["success"], item_result
         item_key = item_result["item_key"]
@@ -1469,7 +1469,7 @@ class TestMiscellaneousAdversarial:
     """Additional adversarial test scenarios."""
 
     def test_rapid_collection_operations(self, zot, test_item, restore_item_state):
-        """Rapid create/move/delete collections should all succeed."""
+        """Rapid create/move/trash collections should all succeed."""
         for i in range(5):
             coll_result = create_collection(zot, f"Rapid_{i}_{time.time()}")
             assert coll_result["success"], f"Rapid collection {i} create should succeed"

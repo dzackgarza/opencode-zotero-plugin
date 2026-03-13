@@ -45,7 +45,7 @@ Live Zotero-dependent proof has not been rerun in this handoff.
   - `cd python && uv run pytest tests/ -v`
   - `cd python && uv run python -m zotero_librarian._dispatch count_items '{}'`
   - `cd python && uv run zotero-lib stats summary`
-  - `\opencode run --agent Minimal 'How many items in my Zotero library?'`
+  - `\opencode run --agent plugin-proof 'How many items in my Zotero library?'`
 - Verify explicit structured failure paths for local write operations, not just successful writes.
 - Prove trash semantics locally if the bridge is available. This remains non-gating but still open in `REQUIREMENTS.md`.
 - Keep sync conflict resolution out of release gating unless `REQUIREMENTS.md` is updated to promote it.

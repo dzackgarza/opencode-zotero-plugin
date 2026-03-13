@@ -30,7 +30,7 @@ def trash_snapshots(
     Returns:
         Dict with:
             - dry_run: bool
-            - count: number of snapshots found (or deleted when dry_run=False)
+            - count: number of snapshots found (or trashed when dry_run=False)
             - items: list of dicts with 'key', 'title', 'filename', 'contentType'
             - results: list of trash operation results (empty when dry_run=True)
     """
@@ -86,7 +86,7 @@ def trash_all_notes(
     Returns:
         Dict with:
             - dry_run: bool
-            - count: number of notes found (or deleted when dry_run=False)
+            - count: number of notes found (or trashed when dry_run=False)
             - items: list of dicts with 'key', 'parent_key', 'snippet'
             - results: list of trash operation results (empty when dry_run=True)
     """
@@ -141,9 +141,9 @@ def clean_missing_pdfs(
     Returns:
         Dict with:
             - dry_run: bool
-            - count: number of dangling records found (or deleted when dry_run=False)
+            - count: number of dangling records found (or trashed when dry_run=False)
             - items: list of dicts with 'key', 'filename', 'expected_path'
-            - results: list of delete operation results (empty when dry_run=True)
+            - results: list of trash operation results (empty when dry_run=True)
     """
     if storage_root is None:
         base = Path.home() / "Zotero" / "storage"

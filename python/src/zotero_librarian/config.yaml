@@ -4,12 +4,14 @@ connector:
   poll_attempts: 20
   poll_delay_seconds: 0.25
 plugin:
-  minimum_version: "3.1"
+  minimum_version: '3.1'
   version_probe_path: /version
   fallback_endpoints:
     attach: /attach
     write: /write
+  feature_minimum_versions:
+    delete_tag: 3.2.1
 fulltext_attach:
   allowed_dirs:
-    - /tmp
-    - /var/tmp
+  - /tmp
+  - /var/tmp

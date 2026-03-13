@@ -647,7 +647,7 @@ def merge_items(zot: zotero.Zotero, source_key: str, target_key: str) -> dict:
 
     Args:
         zot: Zotero client
-        source_key: Key of the source item (will be merged and deleted)
+        source_key: Key of the source item (will be merged and trashed)
         target_key: Key of the target item (will receive all data)
 
     Returns:

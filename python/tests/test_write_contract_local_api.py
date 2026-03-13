@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from uuid import uuid4
 
 import pytest
@@ -63,7 +64,13 @@ def _tag_names(item: dict) -> list[str]:
 
 
 def _is_trashed(zot, item_key: str) -> bool:
-    return bool(zot.item(item_key).get("data", {}).get("deleted", False))
+    deadline = time.monotonic() + 5.0
+    while True:
+        if bool(zot.item(item_key).get("data", {}).get("deleted", False)):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.25)
 
 
 def _collection_key(result: dict) -> str:

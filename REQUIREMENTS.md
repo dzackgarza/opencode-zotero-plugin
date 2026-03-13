@@ -17,6 +17,11 @@ Tests, live proofs, and other gates apply after the required implementation chec
    Writes come from local desktop surfaces such as `http://127.0.0.1:23119/connector/...`
    and the installed local add-on endpoints described in
    `python/src/zotero_librarian/config.yaml` and reported by the add-on version probe.
+1. The local add-on is part of the owned stack.
+   If a release-gating bug is in the add-on, fix the add-on at the source and
+   update the client contract or version gate as needed.
+   Do not treat owned add-on bugs as external blockers and do not paper them
+   over here as the final state.
 1. External enrichment remains allowed.
    Crossref, PubMed, Unpaywall, Semantic Scholar, arXiv, and similar metadata/PDF sources are in scope.
 1. Agents must be able to write locally.

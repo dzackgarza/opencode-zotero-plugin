@@ -91,6 +91,20 @@ def plugin_minimum_version() -> str:
     return _require_string(section.get("minimum_version"), path="plugin.minimum_version", source=source)
 
 
+def plugin_feature_minimum_version(feature_name: str) -> str:
+    source, section = _section("plugin")
+    feature_versions = _require_mapping(
+        section.get("feature_minimum_versions"),
+        path="plugin.feature_minimum_versions",
+        source=source,
+    )
+    return _require_string(
+        feature_versions.get(feature_name),
+        path=f"plugin.feature_minimum_versions.{feature_name}",
+        source=source,
+    )
+
+
 def plugin_version_probe_path() -> str:
     source, section = _section("plugin")
     return _require_string(section.get("version_probe_path"), path="plugin.version_probe_path", source=source)
