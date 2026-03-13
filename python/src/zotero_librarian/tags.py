@@ -7,7 +7,17 @@ from typing import Any
 from pyzotero import zotero
 
 from .client import _all_items
-from .connector import error_result, local_write, result_from_exception
+from .connector import (
+    ConnectorWriteError,
+    error_result,
+    local_write,
+    require_local_plugin_version,
+    result_from_exception,
+)
+from .settings import plugin_feature_minimum_version
+
+
+DELETE_TAG_MIN_PLUGIN_VERSION = plugin_feature_minimum_version("delete_tag")
 
 
 def _noop_result(operation: str, **details: Any) -> dict[str, Any]:
@@ -63,6 +73,15 @@ def _merge_details(result: dict[str, Any], **details: Any) -> dict[str, Any]:
     merged_details.update(details)
     merged["details"] = merged_details
     return merged
+
+
+def _item_has_tag(zot: zotero.Zotero, item_key: str, tag_name: str) -> bool:
+    item = zot.item(item_key)
+    return any(
+        tag.get("tag", "").strip() == tag_name
+        for tag in item.get("data", {}).get("tags", [])
+        if tag.get("tag", "").strip()
+    )
 
 
 def merge_tags(zot: zotero.Zotero, source_tags: list[str], target_tag: str) -> dict[str, Any]:
@@ -169,6 +188,14 @@ def delete_tag(zot: zotero.Zotero, tag_name: str) -> dict[str, Any]:
             updated_items=0,
             tag_name=cleaned_tag_name,
         )
+    try:
+        require_local_plugin_version(
+            DELETE_TAG_MIN_PLUGIN_VERSION,
+            operation="delete_tag",
+        )
+    except ConnectorWriteError as exc:
+        return exc.to_dict()
+
     return _merge_details(
         local_write(
             "delete_tag",

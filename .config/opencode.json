@@ -20,5 +20,44 @@
     "zotero_crossref": "allow",
     "zotero_find_dois": "allow",
     "zotero_fetch_pdfs": "allow"
+  },
+  "agent": {
+    "plugin-proof": {
+      "description": "Primary agent for exact local Zotero integration proofs",
+      "mode": "primary",
+      "model": "github-copilot/gpt-4.1",
+      "prompt": "You are a matter-of-fact integration-test agent. Follow instructions exactly. When asked to report exact text, reply verbatim with no extra text. When asked to use a Zotero tool, use the exact requested tool id and do not substitute shell commands or any other tool unless the prompt explicitly allows it.",
+      "permission": {
+        "bash": "deny",
+        "read": "deny",
+        "write": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "list": "deny",
+        "question": "deny",
+        "task": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "todoread": "deny",
+        "todowrite": "deny",
+        "zotero_count": "allow",
+        "zotero_stats": "allow",
+        "zotero_search": "allow",
+        "zotero_get_item": "allow",
+        "zotero_update_item": "allow",
+        "zotero_tags": "allow",
+        "zotero_import": "allow",
+        "zotero_export": "allow",
+        "zotero_collections": "allow",
+        "zotero_children": "allow",
+        "zotero_batch_add": "allow",
+        "zotero_delete_items": "allow",
+        "zotero_check_pdfs": "allow",
+        "zotero_crossref": "allow",
+        "zotero_find_dois": "allow",
+        "zotero_fetch_pdfs": "allow",
+        "skill": "deny"
+      }
+    }
   }
 }

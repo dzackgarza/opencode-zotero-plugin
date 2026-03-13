@@ -15,18 +15,19 @@ from pyzotero import zotero
 
 from .connector import (
     ConnectorWriteError,
-    FULLTEXT_ATTACH_PATH,
+    CONNECTOR_TIMEOUT,
     MIN_LOCAL_PLUGIN_VERSION,
-    endpoint_url,
     error_result,
     local_write,
+    plugin_endpoint_path,
+    plugin_endpoint_url,
     require_local_plugin_version,
 )
+from .settings import fulltext_allowed_dirs
 
 
-FULLTEXT_ATTACH_URL = endpoint_url(FULLTEXT_ATTACH_PATH)
-FULLTEXT_ATTACH_TIMEOUT = 30.0
-FULLTEXT_ALLOWED_DIRS = (Path("/tmp"), Path("/var/tmp"))
+FULLTEXT_ALLOWED_DIRS = fulltext_allowed_dirs()
+FULLTEXT_STAGING_DIR = FULLTEXT_ALLOWED_DIRS[0]
 
 
 def _is_fulltext_allowed_path(file_path: Path) -> bool:
@@ -40,7 +41,7 @@ def _stage_file_for_fulltext_attach(file_path: Path) -> tuple[Path, bool]:
     with tempfile.NamedTemporaryFile(
         prefix="zotero-fulltext-",
         suffix=file_path.suffix,
-        dir="/tmp",
+        dir=str(FULLTEXT_STAGING_DIR),
         delete=False,
     ) as staged_handle:
         staged_path = Path(staged_handle.name)
@@ -98,10 +99,12 @@ def attach_file_to_item(
             MIN_LOCAL_PLUGIN_VERSION,
             operation=operation,
         )
+        attach_path = plugin_endpoint_path(plugin_info, "attach")
+        attach_url = plugin_endpoint_url(plugin_info, "attach")
         response = httpx.post(
-            FULLTEXT_ATTACH_URL,
+            attach_url,
             json=payload,
-            timeout=FULLTEXT_ATTACH_TIMEOUT,
+            timeout=CONNECTOR_TIMEOUT,
         )
     except ConnectorWriteError as exc:
         return exc.to_dict()
@@ -109,10 +112,11 @@ def attach_file_to_item(
         return error_result(
             operation,
             "fulltext_attach_request",
-            f"Request to {FULLTEXT_ATTACH_URL} failed",
+            f"Request to {attach_url} failed",
             details={
                 "parent_item_key": parent_item_key,
                 "file_path": file_path,
+                "endpoint": attach_path,
                 "staged_file_path": str(staged_path),
                 "exception_type": type(exc).__name__,
             },
@@ -125,10 +129,11 @@ def attach_file_to_item(
         return error_result(
             operation,
             "fulltext_attach_endpoint",
-            "The /fulltext-attach Zotero plugin endpoint is not available.",
+            "The configured attach endpoint is not available.",
             details={
                 "parent_item_key": parent_item_key,
                 "file_path": file_path,
+                "endpoint": attach_path,
                 "status_code": response.status_code,
                 "body": response.text,
             },
@@ -140,10 +145,11 @@ def attach_file_to_item(
         return error_result(
             operation,
             "parse_response",
-            "The /fulltext-attach endpoint did not return valid JSON.",
+            "The configured attach endpoint did not return valid JSON.",
             details={
                 "parent_item_key": parent_item_key,
                 "file_path": file_path,
+                "endpoint": attach_path,
                 "status_code": response.status_code,
                 "body": response.text,
             },
@@ -153,10 +159,11 @@ def attach_file_to_item(
         return error_result(
             operation,
             "fulltext_attach_endpoint",
-            response_data.get("error", "The /fulltext-attach endpoint reported a failure."),
+            response_data.get("error", "The configured attach endpoint reported a failure."),
             details={
                 "parent_item_key": parent_item_key,
                 "file_path": file_path,
+                "endpoint": attach_path,
                 "status_code": response.status_code,
                 "response": response_data,
             },
@@ -179,9 +186,9 @@ def attach_file_to_item(
 def upload_pdf(zot: zotero.Zotero, parent_item_key: str, pdf_path: str, title: str = None) -> dict:
     """Upload a PDF file as an attachment to an item.
 
-    Uses the installed local `/fulltext-attach` plugin endpoint to attach the
-    PDF to an existing item as a stored Zotero attachment. Files outside
-    `/tmp` and `/var/tmp` are staged into `/tmp` before the request.
+    Uses the installed local add-on's configured attach endpoint to attach the
+    PDF to an existing item as a stored Zotero attachment. Files outside the
+    configured staging directories are copied into one of them before upload.
 
     Args:
         zot: Zotero client
@@ -610,7 +617,7 @@ def extract_and_attach_text(
     """Extract text from a PDF attachment and upload the result as a Markdown attachment.
 
     Finds the first PDF attachment child of item_key, runs the configured extractor,
-    and uploads the output as a new child attachment via the /fulltext-attach endpoint.
+    and uploads the output as a new child attachment via the configured attach endpoint.
 
     Args:
         zot:        Zotero client.

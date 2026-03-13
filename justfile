@@ -29,11 +29,18 @@ install:
 
 # Run opencode with this plugin for testing
 run prompt:
-    \opencode run --agent Minimal '{{prompt}}'
+    \opencode run --agent plugin-proof '{{prompt}}'
 
 # Setup npm trusted publisher (one-time manual setup)
 setup-npm-trust:
-    npm trust github --repository dzackgarza/{{file_stem(justfile_directory())}} --file publish.yml
+    npm trust github --repository dzackgarza/$(basename {{justfile_directory()}}) --file publish.yml
+
+# Push changes and clear the global OpenCode plugin install cache
+push *git_args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git push {{git_args}}
+    just --justfile "$HOME/justfile" opencode-clear-plugin-install-cache
 
 # Manual publish from local (requires 2FA)
 publish:

@@ -1321,18 +1321,20 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "arxiv", marker = "extra == 'arxiv'", specifier = ">=2.1.0" },
+    { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pymupdf4llm", marker = "extra == 'arxiv'", specifier = ">=0.0.17" },
     { name = "python-dateutil", marker = "extra == 'arxiv'", specifier = ">=2.8.2" },
     { name = "pyzotero", specifier = ">=1.10.0" },
     { name = "rapidfuzz", specifier = ">=3.0.0" },
 ]
-provides-extras = ["arxiv"]
+provides-extras = ["arxiv", "docling"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "fastmcp", specifier = ">=0.1.0" },
     { name = "pytest", specifier = ">=9.0.2" },
+    { name = "reportlab", specifier = ">=4.0.0" },
 ]
 
 [[package]]
