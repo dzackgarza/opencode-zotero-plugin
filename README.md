@@ -38,6 +38,27 @@ Repo-local verification uses [`.envrc`](./.envrc), [`.config/opencode.json`](./.
 - [Zotero](https://www.zotero.org/) desktop app running locally with the local API enabled
 - [docling](https://github.com/DS4SD/docling) or [MinerU](https://github.com/opendatalab/MinerU) for PDF extraction
 
+## Tools
+
+| Tool | Description | Key Inputs |
+|------|-------------|-----------|
+| `zotero_count` | Total item count | — |
+| `zotero_stats` | Library statistics | `action`: `"summary"`, `"types"`, `"years"`, `"tags"`, `"attachments"` |
+| `zotero_search` | Search/filter library | `action`: `"by_title"`, `"by_author"`, `"without_pdf"`, `"without_tags"`; `query`: string |
+| `zotero_get_item` | Full record for one item | `item_key`: string |
+| `zotero_children` | Attachments/notes for an item | `item_key`: string |
+| `zotero_update_item` | Update item fields | `item_key`: string; `fields`: object |
+| `zotero_tags` | Tag operations | `action`: `"list"`, `"add"`, `"remove"`, `"rename"`; `item_key`, `tag`, `new_tag` |
+| `zotero_import` | Import by identifier | `action`: `"doi"`, `"isbn"`, `"pmid"`, `"arxiv"`; `identifier`: string |
+| `zotero_batch_add` | Bulk import from file | `action`: `"from_file"`; `file_path`: string |
+| `zotero_export` | Export items | `action`: `"bibtex"`, `"ris"`, `"json"`; `item_keys`: string[] |
+| `zotero_collections` | Collection operations | `action`: `"list"`, `"create"`, `"add_item"`; `name`, `collection_key`, `item_key` |
+| `zotero_trash_items` | Trash items | `item_keys`: string[] |
+| `zotero_check_pdfs` | Check PDF attachment status | `item_keys?`: string[] |
+| `zotero_crossref` | CrossRef metadata lookup | `doi`: string |
+| `zotero_find_dois` | Find missing DOIs | `item_keys?`: string[] |
+| `zotero_fetch_pdfs` | Download open-access PDFs | `item_keys?`: string[] |
+
 ## PDF Extraction
 
 - Default extractor: `docling`
