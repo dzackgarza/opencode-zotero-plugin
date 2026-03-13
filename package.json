@@ -1,7 +1,9 @@
 {
   "name": "@dzackgarza/opencode-zotero-plugin",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "test": "just --justfile justfile test",
+    "typecheck": "just --justfile justfile typecheck",
+    "check": "just --justfile justfile check"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -25,5 +27,12 @@
     "opencode",
     "plugin"
   ],
-  "funding": "https://ko-fi.com/I2I57UKJ8"
+  "funding": "https://ko-fi.com/I2I57UKJ8",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src/"
+  ]
 }
