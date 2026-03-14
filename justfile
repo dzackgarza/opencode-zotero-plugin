@@ -13,7 +13,7 @@ check: justfile-hygiene typecheck test-import
 
 # TypeScript typecheck
 typecheck: justfile-hygiene
-    direnv exec "{{repo_root}}" bun run typecheck
+    direnv exec "{{repo_root}}" bunx tsc --noEmit
 
 # Verify Python package imports correctly
 test-import: justfile-hygiene
