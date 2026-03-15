@@ -5,17 +5,16 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const PYTHON_PROJECT_DIR = join(import.meta.dir, "..", "python");
-const PYTHON_SRC_DIR = join(PYTHON_PROJECT_DIR, "src");
 const PYTHON_COMMAND_TIMEOUT_MS = 90000;
 
 async function callZotero(toolName: string, args: Record<string, unknown>): Promise<string> {
   try {
     const { stdout } = await execFileAsync(
       "uv",
-      ["run", "python", "-m", "zotero_librarian._dispatch", toolName, JSON.stringify(args)],
+      ["run", "zotero-lib", "dispatch", toolName, JSON.stringify(args)],
       {
         cwd: PYTHON_PROJECT_DIR,
-        env: { ...process.env, PYTHONPATH: PYTHON_SRC_DIR },
+        env: { ...process.env },
         timeout: PYTHON_COMMAND_TIMEOUT_MS,
       },
     );
@@ -36,6 +35,49 @@ async function callZotero(toolName: string, args: Record<string, unknown>): Prom
   }
 }
 
+function unknownAction(operation: string, action: string): string {
+  return JSON.stringify({
+    success: false,
+    operation,
+    stage: "plugin_adapter",
+    error: `Unknown action: ${action}`,
+  });
+}
+
+const statsActionTools: Record<string, string> = {
+  summary: "library_summary",
+  types: "items_per_type",
+  years: "items_per_year",
+  tags: "tag_cloud",
+  attachments: "attachment_summary",
+};
+
+const searchActionTools: Record<string, string> = {
+  by_title: "search_by_title",
+  by_author: "search_by_author",
+  without_pdf: "items_without_pdf",
+  without_tags: "items_without_tags",
+  not_in_collection: "items_not_in_collection",
+  duplicate_dois: "duplicate_dois",
+  duplicate_titles: "duplicate_titles",
+  invalid_dois: "items_with_invalid_doi",
+  by_doi: "get_item_by_doi",
+};
+
+const importActionTools: Record<string, string> = {
+  by_doi: "import_by_doi",
+  by_isbn: "import_by_isbn",
+  by_pmid: "import_by_pmid",
+};
+
+const exportActionTools: Record<string, string> = {
+  json: "export_to_json",
+  bibtex: "export_to_bibtex",
+  csv: "export_to_csv",
+  ris: "export_to_ris",
+  csljson: "export_to_csljson",
+};
+
 export const ZoteroPlugin: Plugin = async () => ({
   tool: {
     zotero_count: tool({
@@ -51,11 +93,8 @@ export const ZoteroPlugin: Plugin = async () => ({
         action: tool.schema.string().describe("'summary', 'types', 'years', 'tags', or 'attachments'"),
       },
       async execute(args) {
-        if (args.action === "types") return callZotero("items_per_type", {});
-        if (args.action === "years") return callZotero("items_per_year", {});
-        if (args.action === "tags") return callZotero("tag_cloud", {});
-        if (args.action === "attachments") return callZotero("attachment_summary", {});
-        return callZotero("library_summary", {});
+        const selected = statsActionTools[args.action] ?? statsActionTools.summary;
+        return callZotero(selected, {});
       },
     }),
     zotero_search: tool({
@@ -65,16 +104,12 @@ export const ZoteroPlugin: Plugin = async () => ({
         query: tool.schema.string().optional().describe("Search query for title, author, or DOI lookups"),
       },
       async execute(args) {
-        if (args.action === "by_title") return callZotero("search_by_title", { query: args.query || "" });
-        if (args.action === "by_author") return callZotero("search_by_author", { name: args.query || "" });
-        if (args.action === "without_pdf") return callZotero("items_without_pdf", {});
-        if (args.action === "without_tags") return callZotero("items_without_tags", {});
-        if (args.action === "not_in_collection") return callZotero("items_not_in_collection", {});
-        if (args.action === "duplicate_dois") return callZotero("duplicate_dois", {});
-        if (args.action === "duplicate_titles") return callZotero("duplicate_titles", {});
-        if (args.action === "invalid_dois") return callZotero("items_with_invalid_doi", {});
-        if (args.action === "by_doi") return callZotero("get_item_by_doi", { doi: args.query || "" });
-        return JSON.stringify({ error: `Unknown action: ${args.action}` });
+        const selected = searchActionTools[args.action];
+        if (!selected) return unknownAction("zotero_search", args.action);
+        if (args.action === "by_title") return callZotero(selected, { query: args.query || "" });
+        if (args.action === "by_author") return callZotero(selected, { name: args.query || "" });
+        if (args.action === "by_doi") return callZotero(selected, { doi: args.query || "" });
+        return callZotero(selected, {});
       },
     }),
     zotero_get_item: tool({
@@ -116,7 +151,7 @@ export const ZoteroPlugin: Plugin = async () => ({
         if (args.action === "list") return callZotero("all_tags", {});
         if (args.action === "add") return callZotero("add_tags_to_item", { item_key: args.item_key, tags: args.tags });
         if (args.action === "remove") return callZotero("remove_tags_from_item", { item_key: args.item_key, tags: args.tags });
-        return JSON.stringify({ error: `Unknown action: ${args.action}` });
+        return unknownAction("zotero_tags", args.action);
       },
     }),
     zotero_import: tool({
@@ -126,10 +161,11 @@ export const ZoteroPlugin: Plugin = async () => ({
         identifier: tool.schema.string().describe("Identifier to import"),
       },
       async execute(args) {
-        if (args.action === "by_doi") return callZotero("import_by_doi", { doi: args.identifier });
-        if (args.action === "by_isbn") return callZotero("import_by_isbn", { isbn: args.identifier });
-        if (args.action === "by_pmid") return callZotero("import_by_pmid", { pmid: args.identifier });
-        return JSON.stringify({ error: `Unknown action: ${args.action}` });
+        const selected = importActionTools[args.action];
+        if (!selected) return unknownAction("zotero_import", args.action);
+        if (args.action === "by_doi") return callZotero(selected, { doi: args.identifier });
+        if (args.action === "by_isbn") return callZotero(selected, { isbn: args.identifier });
+        return callZotero(selected, { pmid: args.identifier });
       },
     }),
     zotero_batch_add: tool({
@@ -155,12 +191,12 @@ export const ZoteroPlugin: Plugin = async () => ({
         if (args.collection && ["json", "bibtex", "csv"].includes(args.action)) {
           return callZotero("export_collection", { collection_key: args.collection, format: args.action });
         }
-        if (args.action === "json") return callZotero("export_to_json", {});
-        if (args.action === "bibtex") return callZotero("export_to_bibtex", {});
-        if (args.action === "csv") return callZotero("export_to_csv", {});
-        if (args.action === "ris") return callZotero("export_to_ris", { collection: args.collection });
-        if (args.action === "csljson") return callZotero("export_to_csljson", { collection: args.collection });
-        return JSON.stringify({ error: `Unknown action: ${args.action}` });
+        const selected = exportActionTools[args.action];
+        if (!selected) return unknownAction("zotero_export", args.action);
+        if (args.action === "ris" || args.action === "csljson") {
+          return callZotero(selected, { collection: args.collection });
+        }
+        return callZotero(selected, {});
       },
     }),
     zotero_collections: tool({
@@ -173,7 +209,7 @@ export const ZoteroPlugin: Plugin = async () => ({
       async execute(args) {
         if (args.action === "list") return callZotero("get_collections", {});
         if (args.action === "move_item") return callZotero("move_item_to_collection", { item_key: args.item_key, collection_key: args.collection_key });
-        return JSON.stringify({ error: `Unknown action: ${args.action}` });
+        return unknownAction("zotero_collections", args.action);
       },
     }),
     zotero_trash_items: tool({

@@ -4,9 +4,10 @@ import json
 import sys
 
 from .attachments import extract_and_attach_text, rename_pdf_attachments
-from .batch import batch_trash_items
-from .cleanup import clean_missing_pdfs, trash_all_notes, trash_snapshots
+from .batch import batch_delete_items
+from .cleanup import clean_missing_pdfs, delete_all_notes, delete_snapshots
 from .client import count_items, get_zotero
+from .collections import create_collection, delete_collection, move_collection, rename_collection
 from .connector import result_from_exception
 from .duplicates import duplicate_dois, duplicate_titles, find_fuzzy_duplicates_by_title
 from .enrichment import (
@@ -18,13 +19,13 @@ from .enrichment import (
     update_missing_dois,
 )
 from .export import export_collection, export_to_bibtex, export_to_csljson, export_to_csv, export_to_json, export_to_ris
-from .import_ import import_by_doi, import_by_isbn, import_by_pmid
-from .lookup import lookup, lookup_citekey, lookup_zotero_key
+from .import_ import import_by_arxiv, import_by_doi, import_by_isbn, import_by_pmid
 from .items import (
+    add_item_to_collection,
     add_tags_to_item,
+    delete_item,
     move_item_to_collection,
     remove_tags_from_item,
-    trash_item,
     update_item_fields,
 )
 from .query import (
@@ -42,8 +43,11 @@ from .query import (
     search_advanced,
     search_by_author,
     search_by_title,
+    search_by_year,
 )
+from .sync import get_last_sync, get_sync_status
 from .stats import attachment_summary, items_per_type, items_per_year, library_summary, pdf_status, tag_cloud
+from .tags import delete_tag, delete_unused_tags, get_unused_tags, merge_tags, rename_tag
 from .validation import items_with_invalid_doi
 
 
@@ -61,6 +65,7 @@ TOOLS = {
     "items_not_in_collection": lambda zot, a: list(items_not_in_collection(zot)),
     "search_by_title": lambda zot, a: search_by_title(zot, a["query"]),
     "search_by_author": lambda zot, a: search_by_author(zot, a["name"]),
+    "search_by_year": lambda zot, a: search_by_year(zot, int(a["year"])),
     "search_advanced": lambda zot, a: search_advanced(zot, a["filters"]),
     "duplicate_dois": lambda zot, a: duplicate_dois(zot),
     "duplicate_titles": lambda zot, a: duplicate_titles(zot),
@@ -74,8 +79,13 @@ TOOLS = {
     "add_tags_to_item": lambda zot, a: add_tags_to_item(zot, a["item_key"], a["tags"]),
     "remove_tags_from_item": lambda zot, a: remove_tags_from_item(zot, a["item_key"], a["tags"]),
     "move_item_to_collection": lambda zot, a: move_item_to_collection(zot, a["item_key"], a["collection_key"]),
-    "trash_item": lambda zot, a: trash_item(zot, a["item_key"]),
-    "trash_items": lambda zot, a: batch_trash_items(zot, a["item_keys"]),
+    "add_item_to_collection": lambda zot, a: add_item_to_collection(zot, a["item_key"], a["collection_key"]),
+    "create_collection": lambda zot, a: create_collection(zot, a["name"], a.get("parent")),
+    "delete_collection": lambda zot, a: delete_collection(zot, a["key"]),
+    "rename_collection": lambda zot, a: rename_collection(zot, a["key"], a["name"]),
+    "move_collection": lambda zot, a: move_collection(zot, a["key"], a.get("parent")),
+    "delete_item": lambda zot, a: delete_item(zot, a["item_key"]),
+    "delete_items": lambda zot, a: batch_delete_items(zot, a["item_keys"]),
     "library_summary": lambda zot, a: library_summary(zot),
     "items_per_type": lambda zot, a: items_per_type(zot),
     "items_per_year": lambda zot, a: items_per_year(zot),
@@ -95,11 +105,11 @@ TOOLS = {
         apply=a.get("apply", False),
         limit=a.get("limit"),
     ),
-    "trash_snapshots": lambda zot, a: trash_snapshots(
+    "delete_snapshots": lambda zot, a: delete_snapshots(
         zot,
         dry_run=a.get("dry_run", True),
     ),
-    "trash_all_notes": lambda zot, a: trash_all_notes(
+    "delete_all_notes": lambda zot, a: delete_all_notes(
         zot,
         dry_run=a.get("dry_run", True),
     ),
@@ -116,8 +126,8 @@ TOOLS = {
     "extract_and_attach_text": lambda zot, a: extract_and_attach_text(
         zot,
         a["item_key"],
+        extractor=a.get("extractor", "pdftotext"),
     ),
-    "lookup": lambda zot, a: lookup(a["citekey"]),
     "fetch_pdfs": lambda zot, a: fetch_pdfs(
         zot,
         dry_run=a.get("dry_run", False),
@@ -130,6 +140,7 @@ TOOLS = {
     "import_by_doi": lambda zot, a: import_by_doi(zot, a["doi"]),
     "import_by_isbn": lambda zot, a: import_by_isbn(zot, a["isbn"]),
     "import_by_pmid": lambda zot, a: import_by_pmid(zot, a["pmid"]),
+    "import_by_arxiv": lambda zot, a: import_by_arxiv(zot, a["arxiv_id"]),
     "batch_add_identifiers": lambda zot, a: batch_add_identifiers(
         zot,
         identifiers=a["identifiers"],
@@ -138,8 +149,6 @@ TOOLS = {
         tags=a.get("tags"),
         force=a.get("force", False),
     ),
-    "lookup_citekey": lambda zot, a: lookup_citekey(a["citekey"]),
-    "lookup_zotero_key": lambda zot, a: lookup_zotero_key(a["zotero_key"]),
     "export_to_json": lambda zot, a: export_to_json(zot, filepath=a.get("filepath")),
     "export_to_bibtex": lambda zot, a: export_to_bibtex(zot, filepath=a.get("filepath")),
     "export_to_csv": lambda zot, a: export_to_csv(zot, filepath=a.get("filepath")),
@@ -159,7 +168,27 @@ TOOLS = {
         collection_key=a.get("collection"),
         filepath=a.get("filepath"),
     ),
+    "rename_tag": lambda zot, a: rename_tag(zot, a["old_name"], a["new_name"]),
+    "merge_tags": lambda zot, a: merge_tags(zot, a["sources"], a["target"]),
+    "delete_tag": lambda zot, a: delete_tag(zot, a["tag_name"]),
+    "get_unused_tags": lambda zot, a: get_unused_tags(zot),
+    "delete_unused_tags": lambda zot, a: delete_unused_tags(zot),
+    "get_sync_status": lambda zot, a: get_sync_status(zot),
+    "get_last_sync": lambda zot, a: get_last_sync(zot),
 }
+
+
+def available_tools() -> list[str]:
+    """Return the sorted list of supported tool names."""
+    return sorted(TOOLS.keys())
+
+
+def run_tool(tool_name: str, args: dict, *, zot=None):
+    """Execute one dispatcher tool against the provided args."""
+    if tool_name not in TOOLS:
+        raise KeyError(tool_name)
+    client = zot if zot is not None else get_zotero()
+    return TOOLS[tool_name](client, args)
 
 
 def main() -> None:
@@ -177,11 +206,11 @@ def main() -> None:
         sys.exit(1)
 
     if tool_name not in TOOLS:
-        print(json.dumps({"error": f"Unknown tool: {tool_name}", "available": sorted(TOOLS.keys())}))
+        print(json.dumps({"error": f"Unknown tool: {tool_name}", "available": available_tools()}))
         sys.exit(1)
 
     try:
-        result = TOOLS[tool_name](get_zotero(), args)
+        result = run_tool(tool_name, args)
         if isinstance(result, str):
             print(result)
         else:
