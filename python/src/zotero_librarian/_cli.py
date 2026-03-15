@@ -7,6 +7,7 @@ from typing import Any
 
 import typer
 
+from .attachments import DEFAULT_PDF_EXTRACTOR
 from ._dispatch import run_tool
 from .client import get_zotero
 
@@ -155,8 +156,11 @@ def rename_pdfs(
     _run("rename_pdf_attachments", {"dry_run": not apply, "collection_key": collection})
 
 
-@app.command("extract-text", help="Extract PDF text and attach a .txt child attachment.")
-def extract_text(item_key: str, extractor: str = typer.Option("pdftotext", help="Text extractor backend.")) -> None:
+@app.command("extract-text", help="Extract PDF text to Markdown and attach it as a child attachment.")
+def extract_text(
+    item_key: str,
+    extractor: str = typer.Option(DEFAULT_PDF_EXTRACTOR, help="Markdown extractor backend."),
+) -> None:
     _run("extract_and_attach_text", {"item_key": item_key, "extractor": extractor})
 
 

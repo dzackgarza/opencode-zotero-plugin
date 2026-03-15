@@ -540,14 +540,14 @@ def rename_pdf_attachments(
     return results
 
 
-_DEFAULT_PDF_EXTRACTOR = "docling"
+DEFAULT_PDF_EXTRACTOR = "docling"
 _PDF_EXTRACTOR_ENV = "ZOTERO_PDF_EXTRACTOR"
 _MINERU_CMD_ENV = "ZOTERO_MINERU_CMD"
-_EXTRACTORS = (_DEFAULT_PDF_EXTRACTOR, "mineru")
+_EXTRACTORS = (DEFAULT_PDF_EXTRACTOR, "mineru")
 
 
 def _resolve_pdf_extractor(extractor: str | None = None) -> str:
-    configured = extractor or os.environ.get(_PDF_EXTRACTOR_ENV, _DEFAULT_PDF_EXTRACTOR)
+    configured = extractor or os.environ.get(_PDF_EXTRACTOR_ENV, DEFAULT_PDF_EXTRACTOR)
     return configured.strip().lower()
 
 

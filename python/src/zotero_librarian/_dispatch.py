@@ -3,7 +3,7 @@
 import json
 import sys
 
-from .attachments import extract_and_attach_text, rename_pdf_attachments
+from .attachments import DEFAULT_PDF_EXTRACTOR, extract_and_attach_text, rename_pdf_attachments
 from .batch import batch_delete_items
 from .cleanup import clean_missing_pdfs, delete_all_notes, delete_snapshots
 from .client import count_items, get_zotero
@@ -126,7 +126,7 @@ TOOLS = {
     "extract_and_attach_text": lambda zot, a: extract_and_attach_text(
         zot,
         a["item_key"],
-        extractor=a.get("extractor", "pdftotext"),
+        extractor=a.get("extractor", DEFAULT_PDF_EXTRACTOR),
     ),
     "fetch_pdfs": lambda zot, a: fetch_pdfs(
         zot,
