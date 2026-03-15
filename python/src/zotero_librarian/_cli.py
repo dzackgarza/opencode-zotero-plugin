@@ -1,496 +1,460 @@
-"""Human-friendly CLI for Zotero Librarian."""
+"""Typer CLI for Zotero Librarian."""
 
-import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
+import typer
+
+from .attachments import DEFAULT_PDF_EXTRACTOR
+from ._dispatch import run_tool
 from .client import get_zotero
 
 
-def _print(data: Any) -> None:
-    print(json.dumps(data, indent=2, default=str, ensure_ascii=False))
+def _emit(data: Any) -> None:
+    if isinstance(data, str):
+        print(data)
+        return
+    if isinstance(data, (dict, list)):
+        print(json.dumps(data, indent=2, default=str, ensure_ascii=False))
+        return
+    print(data)
 
 
 def _zot():
     return get_zotero()
 
 
-def cmd_count(_args) -> None:
-    from .client import count_items
-
-    print(count_items(_zot()))
+def _run(tool_name: str, args: dict) -> None:
+    _emit(run_tool(tool_name, args, zot=_zot()))
 
 
-def cmd_stats(args) -> None:
-    from .stats import attachment_summary, items_per_type, items_per_year, library_summary, pdf_status, tag_cloud
-
-    zot = _zot()
-    if args.action == "summary":
-        _print(library_summary(zot))
-    elif args.action == "types":
-        _print(items_per_type(zot))
-    elif args.action == "years":
-        _print(items_per_year(zot))
-    elif args.action == "tags":
-        _print(tag_cloud(zot))
-    elif args.action == "attachments":
-        _print(attachment_summary(zot))
-    elif args.action == "pdf-status":
-        _print(pdf_status(zot))
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [entry.strip() for entry in value.split(",") if entry.strip()]
 
 
-def cmd_search(args) -> None:
-    from .duplicates import duplicate_dois, duplicate_titles, find_fuzzy_duplicates_by_title
-    from .query import (
-        find_notes,
-        get_item_by_doi,
-        items_not_in_collection,
-        items_without_pdf,
-        items_without_tags,
-        search_by_author,
-        search_by_title,
-        search_by_year,
-    )
-    from .validation import items_with_invalid_doi
+app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help=(
+        "Manage your local Zotero library from the command line.\n\n"
+        "Setup:\n"
+        "- Start Zotero 7+ and enable local API access.\n"
+        "- Run commands through `uv run zotero-lib ...` or installed `zotero-lib`."
+    ),
+)
 
-    zot = _zot()
-    if args.action == "by-title":
-        _print(search_by_title(zot, args.query))
-    elif args.action == "by-author":
-        _print(search_by_author(zot, args.query))
-    elif args.action == "by-year":
-        try:
-            year = int(args.query)
-        except (TypeError, ValueError):
-            build_parser().error(f"'by-year' requires a numeric year, got: {args.query!r}")
-        _print(search_by_year(zot, year))
-    elif args.action == "by-doi":
-        _print(get_item_by_doi(zot, args.query))
-    elif args.action == "without-pdf":
-        _print(items_without_pdf(zot))
-    elif args.action == "without-tags":
-        _print(list(items_without_tags(zot)))
-    elif args.action == "not-in-collection":
-        _print(list(items_not_in_collection(zot)))
-    elif args.action == "duplicate-dois":
-        _print(duplicate_dois(zot))
-    elif args.action == "duplicate-titles":
-        _print(duplicate_titles(zot))
-    elif args.action == "fuzzy-duplicate-titles":
-        if args.query:
-            try:
-                threshold = int(args.query)
-            except ValueError:
-                build_parser().error(f"'fuzzy-duplicate-titles' threshold must be an integer, got: {args.query!r}")
-        else:
-            threshold = 85
-        _print(find_fuzzy_duplicates_by_title(zot, threshold=threshold))
-    elif args.action == "invalid-dois":
-        _print(list(items_with_invalid_doi(zot)))
-    elif args.action == "notes":
-        _print(find_notes(zot))
+stats_app = typer.Typer(no_args_is_help=True, help="Aggregate library statistics.")
+search_app = typer.Typer(no_args_is_help=True, help="Search and quality checks.")
+collections_app = typer.Typer(no_args_is_help=True, help="Collection operations.")
+tags_app = typer.Typer(no_args_is_help=True, help="Tag inspection and editing.")
+import_app = typer.Typer(no_args_is_help=True, help="Import references into Zotero.")
+export_app = typer.Typer(no_args_is_help=True, help="Export library data.")
+cleanup_app = typer.Typer(no_args_is_help=True, help="Dry-run-safe cleanup tasks.")
+sync_app = typer.Typer(no_args_is_help=True, help="Local Zotero sync status.")
 
 
-def cmd_get(args) -> None:
-    from .query import get_item
-
-    _print(get_item(_zot(), args.key))
-
-
-def cmd_children(args) -> None:
-    from .query import get_children
-
-    _print(get_children(_zot(), args.key))
+@app.command(help="Return the total item count.")
+def count() -> None:
+    _run("count_items", {})
 
 
-def cmd_collections(args) -> None:
-    from .collections import create_collection, move_collection, rename_collection, trash_collection
-    from .items import add_item_to_collection, move_item_to_collection
-    from .query import get_collections
-
-    zot = _zot()
-    if args.action == "list":
-        _print(get_collections(zot))
-    elif args.action == "create":
-        _print(create_collection(zot, args.name, args.parent))
-    elif args.action == "trash":
-        _print(trash_collection(zot, args.key))
-    elif args.action == "rename":
-        _print(rename_collection(zot, args.key, args.name))
-    elif args.action == "move-item":
-        _print(move_item_to_collection(zot, args.item_key, args.collection_key))
-    elif args.action == "add-item":
-        _print(add_item_to_collection(zot, args.item_key, args.collection_key))
-    elif args.action == "move":
-        _print(move_collection(zot, args.key, args.parent))
+@app.command(help="Get a single item by key.")
+def get(item_key: str) -> None:
+    _run("get_item", {"item_key": item_key})
 
 
-def cmd_tags(args) -> None:
-    from .items import add_tags_to_item, remove_tags_from_item
-    from .query import all_tags
-    from .tags import delete_tag, delete_unused_tags, get_unused_tags, merge_tags, rename_tag
-
-    zot = _zot()
-    if args.action == "list":
-        _print(all_tags(zot))
-    elif args.action == "add":
-        _print(add_tags_to_item(zot, args.item_key, args.tags.split(",")))
-    elif args.action == "remove":
-        _print(remove_tags_from_item(zot, args.item_key, args.tags.split(",")))
-    elif args.action == "rename":
-        _print(rename_tag(zot, args.old_name, args.new_name))
-    elif args.action == "merge":
-        _print(merge_tags(zot, args.sources.split(","), args.target))
-    elif args.action == "delete":
-        _print(delete_tag(zot, args.tag_name))
-    elif args.action == "unused":
-        _print(get_unused_tags(zot))
-    elif args.action == "delete-unused":
-        _print(delete_unused_tags(zot))
+@app.command(help="Get child notes and attachments for an item.")
+def children(item_key: str) -> None:
+    _run("get_children", {"item_key": item_key})
 
 
-def cmd_import(args) -> None:
-    from .import_ import import_by_arxiv, import_by_doi, import_by_isbn, import_by_pmid
-
-    zot = _zot()
-    if args.action == "doi":
-        _print(import_by_doi(zot, args.identifier))
-    elif args.action == "isbn":
-        _print(import_by_isbn(zot, args.identifier))
-    elif args.action == "pmid":
-        _print(import_by_pmid(zot, args.identifier))
-    elif args.action == "arxiv":
-        _print(import_by_arxiv(zot, args.identifier))
+@app.command(help="Update item fields from a JSON object string.")
+def update(item_key: str, fields_json: str) -> None:
+    _run("update_item_fields", {"item_key": item_key, "fields": json.loads(fields_json)})
 
 
-def cmd_batch_add(args) -> None:
-    from .enrichment import batch_add_identifiers
-
-    with open(args.file, "r", encoding="utf-8") as handle:
-        identifiers = [
-            line.strip()
-            for line in handle
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
-
-    _print(
-        batch_add_identifiers(
-            _zot(),
-            identifiers=identifiers,
-            id_type=args.id_type,
-            collection=args.collection,
-            tags=args.tags,
-            force=args.force,
-        )
-    )
-
-
-def cmd_export(args) -> None:
-    from .export import export_collection, export_to_bibtex, export_to_csljson, export_to_csv, export_to_json, export_to_ris
-
-    zot = _zot()
-    filepath = args.output
-    if args.collection and args.action in {"json", "csv", "bibtex"}:
-        result = export_collection(zot, args.collection, filepath=filepath, format=args.action)
-    elif args.action == "json":
-        result = export_to_json(zot, filepath=filepath)
-    elif args.action == "bibtex":
-        result = export_to_bibtex(zot, filepath=filepath)
-    elif args.action == "csv":
-        result = export_to_csv(zot, filepath=filepath)
-    elif args.action == "ris":
-        result = export_to_ris(zot, collection_key=args.collection, filepath=filepath)
-    elif args.action == "csljson":
-        result = export_to_csljson(zot, collection_key=args.collection, filepath=filepath)
-    else:
-        raise ValueError(f"Unknown export action: {args.action}")
-
-    if result:
-        print(result)
-
-
-def cmd_update(args) -> None:
-    from .items import update_item_fields
-
-    _print(update_item_fields(_zot(), args.key, json.loads(args.fields_json)))
-
-
-def cmd_trash(args) -> None:
-    from .batch import batch_trash_items
-    from .items import trash_item
-
-    zot = _zot()
-    if len(args.keys) == 1:
-        _print(trash_item(zot, args.keys[0]))
-    else:
-        _print(batch_trash_items(zot, args.keys))
-
-
-def cmd_check_pdfs(_args) -> None:
-    from .enrichment import check_pdfs
-
-    _print(check_pdfs(_zot(), collection=_args.collection))
-
-
-def cmd_crossref(args) -> None:
-    from .enrichment import crossref_citations
-
-    with open(args.file, "r", encoding="utf-8") as handle:
-        _print(crossref_citations(_zot(), handle.read(), collection=args.collection))
-
-
-def cmd_find_dois(args) -> None:
-    from .enrichment import find_missing_dois
-
-    _print(
-        find_missing_dois(
-            _zot(),
-            apply=args.apply,
-            limit=args.limit,
-            collection=args.collection,
-        )
-    )
-
-
-def cmd_fetch_pdfs(args) -> None:
-    from .enrichment import fetch_pdfs
-
-    sources = [entry.strip() for entry in args.sources.split(",")] if args.sources else None
-    _print(
-        fetch_pdfs(
-            _zot(),
-            dry_run=args.dry_run,
-            limit=args.limit,
-            collection=args.collection,
-            download_dir=args.download_dir,
-            upload=args.upload,
-            sources=sources,
-        )
-    )
-
-
-def cmd_cleanup(args) -> None:
-    from .cleanup import clean_missing_pdfs, trash_all_notes, trash_snapshots
-
-    zot = _zot()
-    dry_run = not args.apply
-    if args.action == "snapshots":
-        _print(trash_snapshots(zot, dry_run=dry_run))
-    elif args.action == "notes":
-        _print(trash_all_notes(zot, dry_run=dry_run))
-    elif args.action == "missing-pdfs":
-        _print(clean_missing_pdfs(zot, dry_run=dry_run, storage_root=args.storage_root))
-
-
-def cmd_rename_pdfs(args) -> None:
-    from .attachments import rename_pdf_attachments
-
-    _print(
-        rename_pdf_attachments(
-            _zot(),
-            dry_run=not args.apply,
-            collection_key=args.collection,
-        )
-    )
-
-
-def cmd_extract_text(args) -> None:
-    from .attachments import extract_and_attach_text
-
-    _print(extract_and_attach_text(_zot(), args.item_key))
-
-
-def cmd_update_dois(args) -> None:
-    from .enrichment import update_missing_dois
-
-    _print(
-        update_missing_dois(
-            _zot(),
-            apply=args.apply,
-            limit=args.limit,
-        )
-    )
-
-
-def cmd_lookup(args) -> None:
-    from .lookup import lookup, lookup_zotero_key
-
-    if args.zotero_key:
-        _print(lookup_zotero_key(args.identifier))
+@app.command("delete", help="Move one or more items to trash.")
+def delete_items(item_keys: list[str]) -> None:
+    if len(item_keys) == 1:
+        _run("delete_item", {"item_key": item_keys[0]})
         return
-    _print(lookup(args.identifier))
+    _run("delete_items", {"item_keys": item_keys})
 
 
-def cmd_sync(args) -> None:
-    from .sync import get_last_sync, get_sync_status
-
-    zot = _zot()
-    if args.action == "status":
-        _print(get_sync_status(zot))
-    elif args.action == "last":
-        _print(get_last_sync(zot))
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="zotero-lib", description="Zotero library management CLI")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    sub.add_parser("count", help="Get total item count")
-
-    stats = sub.add_parser("stats", help="Library statistics")
-    stats.add_argument("action", choices=["summary", "types", "years", "tags", "attachments", "pdf-status"])
-
-    search = sub.add_parser("search", help="Search and filter items")
-    search.add_argument(
-        "action",
-        choices=[
-            "by-title",
-            "by-author",
-            "by-year",
-            "by-doi",
-            "without-pdf",
-            "without-tags",
-            "not-in-collection",
-            "duplicate-dois",
-            "duplicate-titles",
-            "fuzzy-duplicate-titles",
-            "invalid-dois",
-            "notes",
-        ],
-    )
-    search.add_argument("query", nargs="?", help="Search query (for fuzzy-duplicate-titles: similarity threshold 0-100)")
-
-    get = sub.add_parser("get", help="Get a single item by key")
-    get.add_argument("key", help="Item key")
-
-    children = sub.add_parser("children", help="Get child items for a parent item")
-    children.add_argument("key", help="Parent item key")
-
-    update = sub.add_parser("update", help="Update item fields from JSON")
-    update.add_argument("key", help="Item key")
-    update.add_argument("fields_json", help='Fields as JSON, e.g. \'{"title": "New Title"}\'')
-
-    trash = sub.add_parser("trash", help="Move one or more items to trash")
-    trash.add_argument("keys", nargs="+", help="Item key(s)")
-
-    collections = sub.add_parser("collections", help="Collection management")
-    collections.add_argument("action", choices=["list", "create", "trash", "rename", "move-item", "add-item", "move"])
-    collections.add_argument("--key", help="Collection key")
-    collections.add_argument("--name", help="Collection name")
-    collections.add_argument("--parent", help="Parent collection key")
-    collections.add_argument("--item-key", help="Item key")
-    collections.add_argument("--collection-key", help="Target collection key")
-
-    tags = sub.add_parser("tags", help="Tag management")
-    tags.add_argument("action", choices=["list", "add", "remove", "rename", "merge", "delete", "unused", "delete-unused"])
-    tags.add_argument("--item-key", help="Item key")
-    tags.add_argument("--tags", help="Comma-separated tags")
-    tags.add_argument("--old-name", help="Old tag name")
-    tags.add_argument("--new-name", help="New tag name")
-    tags.add_argument("--sources", help="Comma-separated source tags")
-    tags.add_argument("--target", help="Target tag")
-    tags.add_argument("--tag-name", help="Tag name")
-
-    imports = sub.add_parser("import", help="Import items")
-    imports.add_argument("action", choices=["doi", "isbn", "pmid", "arxiv"])
-    imports.add_argument("identifier", help="Identifier to import")
-
-    batch_add = sub.add_parser("batch-add", help="Import many identifiers from a file")
-    batch_add.add_argument("file", help="File with one identifier per line")
-    batch_add.add_argument("--id-type", default="doi", choices=["doi", "isbn", "pmid"])
-    batch_add.add_argument("--collection", help="Collection key")
-    batch_add.add_argument("--tags", help="Comma-separated tags")
-    batch_add.add_argument("--force", action="store_true", help="Skip duplicate detection")
-
-    export = sub.add_parser("export", help="Export library data")
-    export.add_argument("action", choices=["json", "bibtex", "csv", "ris", "csljson"])
-    export.add_argument("--collection", help="Collection key")
-    export.add_argument("--output", "-o", help="Output file path")
-
-    check_pdfs = sub.add_parser("check-pdfs", help="Summarize missing PDF attachments")
-    check_pdfs.add_argument("--collection", help="Collection key")
-
-    crossref = sub.add_parser("crossref", help="Cross-reference citation text against the library")
-    crossref.add_argument("file", help="Text or markdown file")
-    crossref.add_argument("--collection", help="Collection key")
-
-    find_dois = sub.add_parser("find-dois", help="Find missing DOIs via CrossRef")
-    find_dois.add_argument("--apply", action="store_true", help="Write matched DOIs back to Zotero")
-    find_dois.add_argument("--limit", type=int, default=None, help="Maximum items to process")
-    find_dois.add_argument("--collection", help="Collection key")
-
-    fetch_pdfs = sub.add_parser("fetch-pdfs", help="Fetch open-access PDFs for items")
-    fetch_pdfs.add_argument("--dry-run", action="store_true", help="Show matches without downloading")
-    fetch_pdfs.add_argument("--limit", type=int, default=None, help="Maximum items to process")
-    fetch_pdfs.add_argument("--collection", help="Collection key")
-    fetch_pdfs.add_argument("--download-dir", help="Directory to save PDFs into")
-    fetch_pdfs.add_argument("--upload", action="store_true", help="Upload PDFs to Zotero storage")
-    fetch_pdfs.add_argument("--sources", help="Comma-separated PDF sources to try")
-
-    cleanup = sub.add_parser("cleanup", help="Cleanup: snapshots, notes, or dangling PDF records")
-    cleanup.add_argument("action", choices=["snapshots", "notes", "missing-pdfs"])
-    cleanup.add_argument("--apply", action="store_true", help="Actually trash items (default: dry-run)")
-    cleanup.add_argument("--storage-root", default=None, help="Override Zotero storage path (for missing-pdfs)")
-
-    rename_pdfs = sub.add_parser("rename-pdfs", help="Rename PDF attachment titles from parent item title")
-    rename_pdfs.add_argument("--apply", action="store_true", help="Actually write renames (default: dry-run)")
-    rename_pdfs.add_argument("--collection", default=None, help="Restrict to a collection key")
-
-    extract_text = sub.add_parser(
-        "extract-text",
-        help="Extract PDF to Markdown with the configured engine and attach the result",
-    )
-    extract_text.add_argument("item_key", help="Parent item key")
-
-    update_dois = sub.add_parser("update-dois", help="Recover DOIs for items tagged '⛔ No DOI found'")
-    update_dois.add_argument("--apply", action="store_true", help="Write recovered DOIs back to Zotero")
-    update_dois.add_argument("--limit", type=int, default=None, help="Maximum items to process")
-
-    lookup = sub.add_parser("lookup", help="Better BibTeX citation key ↔ Zotero key lookup")
-    lookup.add_argument("identifier", help="Citation key by default; use --zotero-key for reverse lookup")
-    lookup.add_argument(
-        "--zotero-key",
-        action="store_true",
-        help="Treat IDENTIFIER as a Zotero item key and return its Better BibTeX citation key",
+@app.command("batch-add", help="Import identifiers from a file, one per line.")
+def batch_add(
+    file: Path,
+    id_type: str = typer.Option("doi", help="Identifier type: doi, isbn, or pmid."),
+    collection: str | None = typer.Option(None, help="Collection key."),
+    tags: str | None = typer.Option(None, help="Comma-separated tags to add."),
+    force: bool = typer.Option(False, help="Skip duplicate checks."),
+) -> None:
+    with file.open("r", encoding="utf-8") as handle:
+        identifiers = [line.strip() for line in handle if line.strip() and not line.lstrip().startswith("#")]
+    _run(
+        "batch_add_identifiers",
+        {
+            "identifiers": identifiers,
+            "id_type": id_type,
+            "collection": collection,
+            "tags": tags,
+            "force": force,
+        },
     )
 
-    sync = sub.add_parser("sync", help="Sync status")
-    sync.add_argument("action", choices=["status", "last"])
 
-    return parser
+@app.command("check-pdfs", help="Summarize missing PDF attachments.")
+def check_pdfs(collection: str | None = typer.Option(None, help="Collection key filter.")) -> None:
+    _run("check_pdfs", {"collection": collection})
+
+
+@app.command(help="Cross-reference citation text from a file against your library.")
+def crossref(file: Path, collection: str | None = typer.Option(None, help="Collection key filter.")) -> None:
+    _run("crossref_citations", {"text": file.read_text(encoding="utf-8"), "collection": collection})
+
+
+@app.command("find-dois", help="Find missing DOIs through CrossRef.")
+def find_dois(
+    apply: bool = typer.Option(False, help="Write matched DOIs back to Zotero."),
+    limit: int | None = typer.Option(None, help="Maximum items to process."),
+    collection: str | None = typer.Option(None, help="Collection key filter."),
+) -> None:
+    _run("find_missing_dois", {"apply": apply, "limit": limit, "collection": collection})
+
+
+@app.command("fetch-pdfs", help="Find or attach open-access PDFs.")
+def fetch_pdfs(
+    dry_run: bool = typer.Option(False, help="Show matches without downloading."),
+    limit: int | None = typer.Option(None, help="Maximum items to process."),
+    collection: str | None = typer.Option(None, help="Collection key filter."),
+    download_dir: str | None = typer.Option(None, help="Directory to save PDFs into."),
+    upload: bool = typer.Option(False, help="Upload PDFs back into Zotero storage."),
+    sources: str | None = typer.Option(None, help="Comma-separated source order."),
+) -> None:
+    _run(
+        "fetch_pdfs",
+        {
+            "dry_run": dry_run,
+            "limit": limit,
+            "collection": collection,
+            "download_dir": download_dir,
+            "upload": upload,
+            "sources": _split_csv(sources) or None,
+        },
+    )
+
+
+@app.command("rename-pdfs", help="Rename PDF attachment titles from parent item titles.")
+def rename_pdfs(
+    apply: bool = typer.Option(False, help="Apply changes (default is preview)."),
+    collection: str | None = typer.Option(None, help="Restrict to one collection key."),
+) -> None:
+    _run("rename_pdf_attachments", {"dry_run": not apply, "collection_key": collection})
+
+
+@app.command("extract-text", help="Extract PDF text to Markdown and attach it as a child attachment.")
+def extract_text(
+    item_key: str,
+    extractor: str = typer.Option(DEFAULT_PDF_EXTRACTOR, help="Markdown extractor backend."),
+) -> None:
+    _run("extract_and_attach_text", {"item_key": item_key, "extractor": extractor})
+
+
+@app.command("update-dois", help="Retry DOI lookup for records tagged as missing DOI.")
+def update_dois(
+    apply: bool = typer.Option(False, help="Write recovered DOIs."),
+    limit: int | None = typer.Option(None, help="Maximum items to process."),
+) -> None:
+    _run("update_missing_dois", {"apply": apply, "limit": limit})
+
+
+@app.command(help="Low-level JSON bridge for wrappers (plugin/MCP adapters).")
+def dispatch(
+    tool_name: str,
+    args_json: str = typer.Argument("{}", help="JSON object for tool arguments."),
+) -> None:
+    _run(tool_name, json.loads(args_json))
+
+
+@stats_app.command(help="Library totals and high-level health metrics.")
+def summary() -> None:
+    _run("library_summary", {})
+
+
+@stats_app.command(help="Count items by Zotero item type.")
+def types() -> None:
+    _run("items_per_type", {})
+
+
+@stats_app.command(help="Count items by publication year.")
+def years() -> None:
+    _run("items_per_year", {})
+
+
+@stats_app.command(help="Show a tag frequency map.")
+def tags() -> None:
+    _run("tag_cloud", {})
+
+
+@stats_app.command(help="Summarize attachment coverage.")
+def attachments() -> None:
+    _run("attachment_summary", {})
+
+
+@stats_app.command("pdf-status", help="Summarize PDF coverage ratios.")
+def pdf_status() -> None:
+    _run("pdf_status", {})
+
+
+@search_app.command("by-title", help="Find items by title text.")
+def search_by_title(query: str) -> None:
+    _run("search_by_title", {"query": query})
+
+
+@search_app.command("by-author", help="Find items by creator name.")
+def search_by_author(name: str) -> None:
+    _run("search_by_author", {"name": name})
+
+
+@search_app.command("by-year", help="Find items by publication year.")
+def search_by_year(year: int) -> None:
+    _run("search_by_year", {"year": year})
+
+
+@search_app.command("by-doi", help="Get one item by DOI.")
+def search_by_doi(doi: str) -> None:
+    _run("get_item_by_doi", {"doi": doi})
+
+
+@search_app.command("without-pdf", help="List items without PDF attachments.")
+def search_without_pdf() -> None:
+    _run("items_without_pdf", {})
+
+
+@search_app.command("without-tags", help="List items without any tags.")
+def search_without_tags() -> None:
+    _run("items_without_tags", {})
+
+
+@search_app.command("not-in-collection", help="List items not assigned to collections.")
+def search_not_in_collection() -> None:
+    _run("items_not_in_collection", {})
+
+
+@search_app.command("duplicate-dois", help="Find exact duplicate DOIs.")
+def search_duplicate_dois() -> None:
+    _run("duplicate_dois", {})
+
+
+@search_app.command("duplicate-titles", help="Find exact duplicate titles.")
+def search_duplicate_titles() -> None:
+    _run("duplicate_titles", {})
+
+
+@search_app.command("fuzzy-duplicate-titles", help="Find near-duplicate titles by similarity score.")
+def search_fuzzy_duplicate_titles(threshold: int = typer.Option(85, help="Similarity threshold 0-100.")) -> None:
+    _run("find_fuzzy_duplicates_by_title", {"threshold": threshold})
+
+
+@search_app.command("invalid-dois", help="List items with malformed DOI values.")
+def search_invalid_dois() -> None:
+    _run("items_with_invalid_doi", {})
+
+
+@search_app.command("notes", help="Group notes by parent item and extract citation keys.")
+def search_notes() -> None:
+    _run("find_notes", {})
+
+
+@collections_app.command(help="List all collections.")
+def collections_list() -> None:
+    _run("get_collections", {})
+
+
+@collections_app.command(help="Create a collection.")
+def create(name: str, parent: str | None = typer.Option(None, help="Parent collection key.")) -> None:
+    _run("create_collection", {"name": name, "parent": parent})
+
+
+@collections_app.command(help="Move a collection to trash.")
+def delete(collection_key: str) -> None:
+    _run("delete_collection", {"key": collection_key})
+
+
+@collections_app.command(help="Rename a collection.")
+def rename(collection_key: str, name: str) -> None:
+    _run("rename_collection", {"key": collection_key, "name": name})
+
+
+@collections_app.command("move-item", help="Move an item into a collection.")
+def move_item(item_key: str, collection_key: str) -> None:
+    _run("move_item_to_collection", {"item_key": item_key, "collection_key": collection_key})
+
+
+@collections_app.command("add-item", help="Add an item to a collection without removing existing memberships.")
+def add_item(item_key: str, collection_key: str) -> None:
+    _run("add_item_to_collection", {"item_key": item_key, "collection_key": collection_key})
+
+
+@collections_app.command(help="Move a collection under a new parent.")
+def move(collection_key: str, parent: str | None = typer.Option(None, help="New parent collection key.")) -> None:
+    _run("move_collection", {"key": collection_key, "parent": parent})
+
+
+@tags_app.command(help="List all tags and counts.")
+def tags_list() -> None:
+    _run("all_tags", {})
+
+
+@tags_app.command(help="Add tags to one item.")
+def add(item_key: str, tags: str) -> None:
+    _run("add_tags_to_item", {"item_key": item_key, "tags": _split_csv(tags)})
+
+
+@tags_app.command(help="Remove tags from one item.")
+def remove(item_key: str, tags: str) -> None:
+    _run("remove_tags_from_item", {"item_key": item_key, "tags": _split_csv(tags)})
+
+
+@tags_app.command(help="Rename a tag globally.")
+def rename(old_name: str, new_name: str) -> None:
+    _run("rename_tag", {"old_name": old_name, "new_name": new_name})
+
+
+@tags_app.command(help="Merge source tags into a target tag.")
+def merge(sources: str, target: str) -> None:
+    _run("merge_tags", {"sources": _split_csv(sources), "target": target})
+
+
+@tags_app.command(help="Delete a tag globally.")
+def delete(tag_name: str) -> None:
+    _run("delete_tag", {"tag_name": tag_name})
+
+
+@tags_app.command(help="List currently unused tags.")
+def unused() -> None:
+    _run("get_unused_tags", {})
+
+
+@tags_app.command("delete-unused", help="Delete all currently unused tags.")
+def delete_unused() -> None:
+    _run("delete_unused_tags", {})
+
+
+@import_app.command("doi", help="Import one DOI.")
+def import_doi(doi: str) -> None:
+    _run("import_by_doi", {"doi": doi})
+
+
+@import_app.command("isbn", help="Import one ISBN.")
+def import_isbn(isbn: str) -> None:
+    _run("import_by_isbn", {"isbn": isbn})
+
+
+@import_app.command("pmid", help="Import one PMID.")
+def import_pmid(pmid: str) -> None:
+    _run("import_by_pmid", {"pmid": pmid})
+
+
+@import_app.command("arxiv", help="Import one arXiv identifier.")
+def import_arxiv(arxiv_id: str) -> None:
+    _run("import_by_arxiv", {"arxiv_id": arxiv_id})
+
+
+@export_app.command("json", help="Export library as JSON.")
+def export_json(
+    collection: str | None = typer.Option(None, help="Collection key."),
+    output: str | None = typer.Option(None, help="Output file path."),
+) -> None:
+    if collection:
+        _run("export_collection", {"collection_key": collection, "filepath": output, "format": "json"})
+        return
+    _run("export_to_json", {"filepath": output})
+
+
+@export_app.command("bibtex", help="Export library as BibTeX.")
+def export_bibtex(
+    collection: str | None = typer.Option(None, help="Collection key."),
+    output: str | None = typer.Option(None, help="Output file path."),
+) -> None:
+    if collection:
+        _run("export_collection", {"collection_key": collection, "filepath": output, "format": "bibtex"})
+        return
+    _run("export_to_bibtex", {"filepath": output})
+
+
+@export_app.command("csv", help="Export library as CSV.")
+def export_csv(
+    collection: str | None = typer.Option(None, help="Collection key."),
+    output: str | None = typer.Option(None, help="Output file path."),
+) -> None:
+    if collection:
+        _run("export_collection", {"collection_key": collection, "filepath": output, "format": "csv"})
+        return
+    _run("export_to_csv", {"filepath": output})
+
+
+@export_app.command("ris", help="Export library as RIS.")
+def export_ris(
+    collection: str | None = typer.Option(None, help="Collection key."),
+    output: str | None = typer.Option(None, help="Output file path."),
+) -> None:
+    _run("export_to_ris", {"collection": collection, "filepath": output})
+
+
+@export_app.command("csljson", help="Export library as CSL-JSON.")
+def export_csljson(
+    collection: str | None = typer.Option(None, help="Collection key."),
+    output: str | None = typer.Option(None, help="Output file path."),
+) -> None:
+    _run("export_to_csljson", {"collection": collection, "filepath": output})
+
+
+@cleanup_app.command(help="Delete HTML snapshots (dry-run by default).")
+def snapshots(apply: bool = typer.Option(False, help="Apply changes instead of preview.")) -> None:
+    _run("delete_snapshots", {"dry_run": not apply})
+
+
+@cleanup_app.command(help="Delete notes (dry-run by default).")
+def notes(apply: bool = typer.Option(False, help="Apply changes instead of preview.")) -> None:
+    _run("delete_all_notes", {"dry_run": not apply})
+
+
+@cleanup_app.command("missing-pdfs", help="Clean dangling missing-PDF records (dry-run by default).")
+def missing_pdfs(
+    apply: bool = typer.Option(False, help="Apply changes instead of preview."),
+    storage_root: str | None = typer.Option(None, help="Override Zotero storage directory."),
+) -> None:
+    _run("clean_missing_pdfs", {"dry_run": not apply, "storage_root": storage_root})
+
+
+@sync_app.command(help="Show sync status summary.")
+def status() -> None:
+    _run("get_sync_status", {})
+
+
+@sync_app.command(help="Show timestamp of the last sync.")
+def last() -> None:
+    _run("get_last_sync", {})
+
+
+app.add_typer(stats_app, name="stats")
+app.add_typer(search_app, name="search")
+app.add_typer(collections_app, name="collections")
+app.add_typer(tags_app, name="tags")
+app.add_typer(import_app, name="import")
+app.add_typer(export_app, name="export")
+app.add_typer(cleanup_app, name="cleanup")
+app.add_typer(sync_app, name="sync")
 
 
 def main() -> None:
-    args = build_parser().parse_args()
-
-    handlers = {
-        "count": cmd_count,
-        "stats": cmd_stats,
-        "search": cmd_search,
-        "get": cmd_get,
-        "children": cmd_children,
-        "update": cmd_update,
-        "trash": cmd_trash,
-        "collections": cmd_collections,
-        "tags": cmd_tags,
-        "import": cmd_import,
-        "batch-add": cmd_batch_add,
-        "export": cmd_export,
-        "check-pdfs": cmd_check_pdfs,
-        "crossref": cmd_crossref,
-        "find-dois": cmd_find_dois,
-        "fetch-pdfs": cmd_fetch_pdfs,
-        "cleanup": cmd_cleanup,
-        "rename-pdfs": cmd_rename_pdfs,
-        "extract-text": cmd_extract_text,
-        "update-dois": cmd_update_dois,
-        "lookup": cmd_lookup,
-        "sync": cmd_sync,
-    }
-
     try:
-        handlers[args.command](args)
+        app()
     except KeyboardInterrupt:
         sys.exit(130)
     except Exception as exc:

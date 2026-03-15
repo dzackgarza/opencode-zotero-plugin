@@ -1,7 +1,7 @@
 {
   "name": "@dzackgarza/opencode-zotero-plugin",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "./node_modules/.bin/tsc --noEmit"
   },
   "devDependencies": {
     "@types/bun": "latest"

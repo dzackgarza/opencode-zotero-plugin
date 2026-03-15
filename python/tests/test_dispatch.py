@@ -4,6 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from zotero_librarian.attachments import DEFAULT_PDF_EXTRACTOR
 from zotero_librarian.client import count_items
 
 PYTHON_SRC = Path(__file__).parent.parent / "src"
@@ -23,6 +24,16 @@ def run_dispatch(tool_name: str, args: dict) -> dict:
     return json.loads(output)
 
 
+def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "zotero_librarian._cli", *args],
+        cwd=str(PYTHON_SRC),
+        capture_output=True,
+        text=True,
+        env={**__import__("os").environ, "PYTHONPATH": str(PYTHON_SRC)},
+    )
+
+
 class TestDispatchOffline:
     def test_unknown_tool_returns_error(self):
         data = run_dispatch("nonexistent_tool", {})
@@ -35,3 +46,9 @@ class TestDispatchOffline:
         data = run_dispatch("get_item", {"item_key": first_item["key"]})
         assert data["key"] == first_item["key"]
         assert data["data"]["title"] == first_item["data"]["title"]
+
+    def test_extract_text_help_uses_canonical_default_backend(self):
+        result = run_cli("extract-text", "--help")
+        assert result.returncode == 0
+        assert "--extractor" in result.stdout
+        assert DEFAULT_PDF_EXTRACTOR in result.stdout

@@ -21,7 +21,7 @@ Modules:
     validation   — DOI/ISBN/ISSN validators
     arxiv        — arXiv search and download (optional)
     _dispatch    — JSON-in/JSON-out CLI dispatcher
-    _cli         — human-friendly CLI entry point
+    _cli         — Typer CLI entry point (zotero-lib)
 """
 
 from .client import get_zotero
