@@ -673,3 +673,187 @@ def replace_attachment(zot: zotero.Zotero, attachment_key: str, new_file_path: s
         )
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+def fetch_arxiv_pdfs(
+    zot: zotero.Zotero,
+    key: str | None = None,
+    min_similarity: float = 0.7,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """
+    Fetch and attach arXiv PDFs for items missing them.
+
+    Phases:
+      1. Extract arXiv ID from Extra field, DOI, or URL.
+      2. If not found, use arxiv title search with min_similarity threshold.
+      3. Download PDF and attach to item, update Extra field.
+
+    Args:
+        zot: Zotero client.
+        key: Specific item key to process. If None, processes all items.
+        min_similarity: Threshold for title search fallback (0.0 to 1.0).
+        dry_run: If True, do not download or attach anything.
+
+    Returns:
+        Dict with stats and results.
+    """
+    import re
+    import time
+    from pathlib import Path
+    from .client import _get_library_with_children
+    from .items import update_item_fields
+    from .enrichment import _item_has_pdf
+    from .arxiv import search_arxiv_papers, download_arxiv_paper
+
+    def _jaccard_similarity(s1: str, s2: str) -> float:
+        set1 = set(re.findall(r'\w+', s1.lower()))
+        set2 = set(re.findall(r'\w+', s2.lower()))
+        if not set1 and not set2:
+            return 1.0
+        return len(set1.intersection(set2)) / len(set1.union(set2))
+
+    def _extract_arxiv_id(item: dict) -> str | None:
+        data = item.get("data", {})
+
+        # 1. Extra field
+        extra = data.get("extra", "")
+        match = re.search(r"(?i)arxiv:\s*([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)", extra)
+        if match:
+            return match.group(1)
+
+        # 2. DOI
+        doi = data.get("DOI", "")
+        match = re.search(r"(?i)10\.48550/arxiv\.([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)", doi)
+        if match:
+            return match.group(1)
+
+        # 3. URL
+        url = data.get("url", "")
+        match = re.search(r"(?i)arxiv\.org/(?:abs|pdf)/([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)", url)
+        if match:
+            return match.group(1)
+
+        return None
+
+    candidates = []
+    if key:
+        item = zot.item(key)
+        if not item:
+            return {"error": f"Item {key} not found."}
+        children = zot.children(key)
+        if not _item_has_pdf(children):
+            candidates.append(item)
+    else:
+        for item in _get_library_with_children(zot):
+            if item["data"].get("itemType") in {"attachment", "note"}:
+                continue
+            if not _item_has_pdf(item.get("_children", [])):
+                candidates.append(item)
+
+    results = []
+    processed = 0
+    attached = 0
+    not_found = 0
+
+    last_api_call = 0.0
+
+    def _rate_limit():
+        nonlocal last_api_call
+        now = time.time()
+        elapsed = now - last_api_call
+        if elapsed < 3.0:
+            time.sleep(3.0 - elapsed)
+        last_api_call = time.time()
+
+    for item in candidates:
+        processed += 1
+        item_key = item["key"]
+        title = item["data"].get("title", "")
+
+        entry: dict[str, Any] = {"key": item_key, "title": title}
+
+        arxiv_id = _extract_arxiv_id(item)
+
+        if not arxiv_id and title:
+            _rate_limit()
+            try:
+                search_results = search_arxiv_papers(query=f'ti:"{title}"', max_results=5)
+            except Exception:
+                search_results = []
+
+            best_match = None
+            best_sim = 0.0
+
+            for paper in search_results:
+                sim = _jaccard_similarity(title, paper["title"])
+                if sim >= min_similarity and sim > best_sim:
+                    best_sim = sim
+                    best_match = paper
+
+            if best_match:
+                arxiv_id = best_match["id"]
+                entry["similarity"] = round(best_sim, 3)
+                entry["search_matched"] = True
+
+        if not arxiv_id:
+            entry["status"] = "not_found"
+            not_found += 1
+            results.append(entry)
+            continue
+
+        entry["arxiv_id"] = arxiv_id
+
+        if dry_run:
+            entry["status"] = "found_dry_run"
+            results.append(entry)
+            continue
+
+        _rate_limit()
+        try:
+            download_result = download_arxiv_paper(arxiv_id, convert_to_markdown=False)
+            if not download_result.get("success"):
+                entry["status"] = "download_failed"
+                entry["error"] = download_result.get("error")
+                results.append(entry)
+                continue
+
+            pdf_path = download_result["pdf_path"]
+
+            upload_result = attach_file_to_item(
+                zot,
+                item_key,
+                pdf_path,
+                title=f"arXiv {arxiv_id} PDF",
+                operation="fetch_arxiv_pdfs",
+            )
+            if upload_result.get("success"):
+                entry["status"] = "attached"
+                attached += 1
+
+                extra = item["data"].get("extra", "")
+                if f"arXiv: {arxiv_id}" not in extra:
+                    new_extra = f"{extra}\nArXiv: {arxiv_id}".strip()
+                    update_item_fields(zot, item_key, {"extra": new_extra})
+            else:
+                entry["status"] = "attach_failed"
+                entry["error"] = upload_result.get("error", "Unknown error")
+
+            try:
+                Path(pdf_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        except Exception as exc:
+            entry["status"] = "error"
+            entry["error"] = str(exc)
+
+        results.append(entry)
+
+    return {
+        "processed": processed,
+        "attached": attached,
+        "not_found": not_found,
+        "dry_run": dry_run,
+        "results": results,
+    }

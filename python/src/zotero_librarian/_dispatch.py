@@ -3,7 +3,7 @@
 import json
 import sys
 
-from .attachments import extract_and_attach_text, rename_pdf_attachments
+from .attachments import extract_and_attach_text, fetch_arxiv_pdfs, rename_pdf_attachments
 from .batch import batch_delete_items
 from .cleanup import clean_missing_pdfs, delete_all_notes, delete_snapshots
 from .client import count_items, get_zotero
@@ -111,6 +111,12 @@ TOOLS = {
         zot,
         dry_run=a.get("dry_run", True),
         collection_key=a.get("collection_key"),
+    ),
+    "fetch_arxiv_pdfs": lambda zot, a: fetch_arxiv_pdfs(
+        zot,
+        key=a.get("key"),
+        min_similarity=a.get("min_similarity", 0.7),
+        dry_run=a.get("dry_run", False),
     ),
     "extract_and_attach_text": lambda zot, a: extract_and_attach_text(
         zot,

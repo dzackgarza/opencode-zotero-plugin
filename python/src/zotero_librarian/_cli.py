@@ -285,6 +285,20 @@ def cmd_rename_pdfs(args) -> None:
     )
 
 
+def cmd_attachments(args) -> None:
+    from .attachments import fetch_arxiv_pdfs
+
+    if args.action == "fetch-arxiv":
+        _print(
+            fetch_arxiv_pdfs(
+                _zot(),
+                key=args.key,
+                min_similarity=args.min_similarity,
+                dry_run=args.dry_run,
+            )
+        )
+
+
 def cmd_extract_text(args) -> None:
     from .attachments import extract_and_attach_text
 
@@ -418,6 +432,14 @@ def build_parser() -> argparse.ArgumentParser:
     rename_pdfs.add_argument("--apply", action="store_true", help="Actually write renames (default: dry-run)")
     rename_pdfs.add_argument("--collection", default=None, help="Restrict to a collection key")
 
+    attachments = sub.add_parser("attachments", help="Attachment operations")
+    att_sub = attachments.add_subparsers(dest="action", required=True)
+
+    fetch_arxiv = att_sub.add_parser("fetch-arxiv", help="Automatically find and attach arXiv PDFs")
+    fetch_arxiv.add_argument("--key", help="Process a specific item key")
+    fetch_arxiv.add_argument("--min-similarity", type=float, default=0.7, help="Minimum title similarity for search fallback (0.0 - 1.0)")
+    fetch_arxiv.add_argument("--dry-run", action="store_true", help="Show what would be downloaded without actually doing it")
+
     extract_text = sub.add_parser("extract-text", help="Extract PDF text and attach as .txt")
     extract_text.add_argument("item_key", help="Parent item key")
 
@@ -453,6 +475,7 @@ def main() -> None:
         "fetch-pdfs": cmd_fetch_pdfs,
         "cleanup": cmd_cleanup,
         "rename-pdfs": cmd_rename_pdfs,
+        "attachments": cmd_attachments,
         "extract-text": cmd_extract_text,
         "update-dois": cmd_update_dois,
         "sync": cmd_sync,
