@@ -818,7 +818,19 @@ def fetch_arxiv_pdfs(
                 results.append(entry)
                 continue
 
-            pdf_path = download_result["pdf_path"]
+            pdf_path = download_result.get("pdf_path")
+            if not pdf_path:
+                # download_arxiv_paper returns markdown_path-only when the paper
+                # was already converted and cached; the PDF still exists on disk.
+                from .arxiv import DEFAULT_STORAGE_PATH
+                candidate = DEFAULT_STORAGE_PATH / f"{arxiv_id}.pdf"
+                if candidate.exists():
+                    pdf_path = str(candidate)
+                else:
+                    entry["status"] = "no_pdf_path"
+                    entry["error"] = "download_arxiv_paper returned no pdf_path"
+                    results.append(entry)
+                    continue
 
             upload_result = attach_file_to_item(
                 zot,
@@ -838,11 +850,8 @@ def fetch_arxiv_pdfs(
             else:
                 entry["status"] = "attach_failed"
                 entry["error"] = upload_result.get("error", "Unknown error")
-
-            try:
-                Path(pdf_path).unlink(missing_ok=True)
-            except Exception:
-                pass
+            # Do NOT delete the PDF: download_arxiv_paper stores it in the
+            # persistent ~/.arxiv-papers cache; deleting it forces re-download.
 
         except Exception as exc:
             entry["status"] = "error"
