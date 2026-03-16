@@ -1484,6 +1484,7 @@ version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "pyyaml" },
     { name = "pyzotero" },
     { name = "rapidfuzz" },
 ]
@@ -1507,6 +1508,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pymupdf4llm", marker = "extra == 'arxiv'", specifier = ">=0.0.17" },
     { name = "python-dateutil", marker = "extra == 'arxiv'", specifier = ">=2.8.2" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "pyzotero", specifier = ">=1.10.0" },
     { name = "rapidfuzz", specifier = ">=3.0.0" },
 ]

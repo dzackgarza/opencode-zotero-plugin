@@ -313,6 +313,21 @@ def cmd_sync(args) -> None:
         _print(get_last_sync(zot))
 
 
+def cmd_analysis(args) -> None:
+    from .analysis import generate_toc_note
+
+    if args.action == "toc-note":
+        _print(
+            generate_toc_note(
+                _zot(),
+                args.key,
+                model=args.model,
+                force=args.force,
+                dry_run=args.dry_run,
+            )
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="zotero-lib", description="Zotero library management CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -428,6 +443,13 @@ def build_parser() -> argparse.ArgumentParser:
     sync = sub.add_parser("sync", help="Sync status")
     sync.add_argument("action", choices=["status", "last"])
 
+    analysis = sub.add_parser("analysis", help="LLM-based analysis")
+    analysis.add_argument("action", choices=["toc-note"])
+    analysis.add_argument("--key", required=True, help="Item key")
+    analysis.add_argument("--model", help="LLM model to use")
+    analysis.add_argument("--force", action="store_true", help="Force regeneration of the TOC note")
+    analysis.add_argument("--dry-run", action="store_true", help="Print output without writing to Zotero")
+
     return parser
 
 
@@ -456,6 +478,7 @@ def main() -> None:
         "extract-text": cmd_extract_text,
         "update-dois": cmd_update_dois,
         "sync": cmd_sync,
+        "analysis": cmd_analysis,
     }
 
     try:

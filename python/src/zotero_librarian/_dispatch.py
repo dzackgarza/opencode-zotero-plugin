@@ -3,6 +3,7 @@
 import json
 import sys
 
+from .analysis import generate_toc_note
 from .attachments import extract_and_attach_text, rename_pdf_attachments
 from .batch import batch_delete_items
 from .cleanup import clean_missing_pdfs, delete_all_notes, delete_snapshots
@@ -155,6 +156,13 @@ TOOLS = {
         zot,
         collection_key=a.get("collection"),
         filepath=a.get("filepath"),
+    ),
+    "analysis_toc_note": lambda zot, a: generate_toc_note(
+        zot,
+        a["key"],
+        model=a.get("model"),
+        force=a.get("force", False),
+        dry_run=a.get("dry_run", False),
     ),
 }
 
