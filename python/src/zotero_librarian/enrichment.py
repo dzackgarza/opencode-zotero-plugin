@@ -102,13 +102,13 @@ def batch_add_identifiers(
     identifiers: list[str],
     id_type: str = "doi",
     collection: str | None = None,
-    tags: str | None = None,
+    tags: list[str] | None = None,
     force: bool = False,
 ) -> dict:
     """Import many identifiers into Zotero through the local API."""
     counts = {"added": 0, "duplicate": 0, "failed": 0}
     results = []
-    tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()] if tags else None
+    tag_list = [tag.strip() for tag in tags if tag.strip()] if tags else None
     for identifier in identifiers:
         existing = _existing_item_for_identifier(zot, identifier, id_type)
         if existing and not force:

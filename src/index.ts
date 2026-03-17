@@ -138,7 +138,7 @@ export const ZoteroPlugin: Plugin = async () => ({
         identifiers: tool.schema.array(tool.schema.string()).describe("Identifiers to import in order"),
         id_type: tool.schema.string().optional().describe("'doi', 'isbn', or 'pmid'"),
         collection: tool.schema.string().optional().describe("Collection key to add imported items into"),
-        tags: tool.schema.string().optional().describe("Comma-separated tags to add to imported items"),
+        tags: tool.schema.array(tool.schema.string()).optional().describe("Tags to add to imported items"),
         force: tool.schema.boolean().optional().describe("Skip duplicate detection"),
       },
       async execute(args) {
