@@ -102,7 +102,7 @@ def batch_add_identifiers(
     identifiers: list[str],
     id_type: str = "doi",
     collection: str | None = None,
-    tags: str | None = None,
+    tags: list[str] | None = None,
     force: bool = False,
 ) -> dict:
     """Import many identifiers into Zotero through the local API."""

@@ -56,18 +56,17 @@ opencode-zotero-plugin --help
 
 Use when you only need the total number of items in the Zotero library.
 
-#### Input
+**Input**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
+This tool takes no parameters.
 
-#### Example Input
+**Example Input**
 
 ```json
 {}
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a string containing just the integer count (e.g., `"142"`).
 
@@ -75,13 +74,13 @@ Returns a string containing just the integer count (e.g., `"142"`).
 
 Use when you need aggregate library statistics such as summary, item types, years, tags, or attachment counts.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `action` | `string` | Yes | 'summary', 'types', 'years', 'tags', or 'attachments' |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -89,23 +88,30 @@ Use when you need aggregate library statistics such as summary, item types, year
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON object matching the requested action's structure.
-For `summary`, includes fields like `total_items`, `collections_count`, `items_without_pdf`.
+For `summary`, returns:
+- `total_items`
+- `item_types` (dict of counts)
+- `collections` (count)
+- `tags` (count)
+- `years` (dict with `earliest`, `latest`)
+- `attachments` (count)
+- `notes` (count)
 
 ### zotero_search
 
 Use when you need to search or filter the local Zotero library.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `action` | `string` | Yes | Search action |
 | `query` | `string` | No | Search query for title, author, or DOI lookups |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -114,7 +120,7 @@ Use when you need to search or filter the local Zotero library.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON array of Zotero item objects or a JSON object detailing search results, including standard Zotero properties (`key`, `title`, `creators`, etc.).
 
@@ -122,13 +128,13 @@ Returns a JSON array of Zotero item objects or a JSON object detailing search re
 
 Use when you need the full Zotero record for a specific item key.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `item_key` | `string` | Yes | Zotero item key |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -136,7 +142,7 @@ Use when you need the full Zotero record for a specific item key.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a single Zotero item JSON object for the given `item_key`.
 
@@ -144,13 +150,13 @@ Returns a single Zotero item JSON object for the given `item_key`.
 
 Use when you need attachments or notes for a Zotero item.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `item_key` | `string` | Yes | Parent Zotero item key |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -158,7 +164,7 @@ Use when you need attachments or notes for a Zotero item.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON array of child item objects (attachments, notes) for the specified parent item.
 
@@ -166,14 +172,14 @@ Returns a JSON array of child item objects (attachments, notes) for the specifie
 
 Use when you need to update fields on an existing Zotero item.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `item_key` | `string` | Yes | Zotero item key |
 | `fields` | `record(string, any)` | Yes | Fields to update |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -184,7 +190,7 @@ Use when you need to update fields on an existing Zotero item.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON object detailing the `success`, `operation`, `stage`, and `item_key`. On error, returns an object with `error` or `details`.
 
@@ -192,7 +198,7 @@ Returns a JSON object detailing the `success`, `operation`, `stage`, and `item_k
 
 Use when you need to inspect or edit Zotero item tags.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -200,7 +206,7 @@ Use when you need to inspect or edit Zotero item tags.
 | `item_key` | `string` | No | Item key for add/remove operations |
 | `tags` | `array(string)` | No | Tags to add or remove |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -210,7 +216,7 @@ Use when you need to inspect or edit Zotero item tags.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 For `list`, returns a JSON array of all tags. For `add` or `remove`, returns a JSON object with `success`, `operation`, `stage`, and `item_key`.
 
@@ -218,14 +224,14 @@ For `list`, returns a JSON array of all tags. For `add` or `remove`, returns a J
 
 Use when you need to import a DOI, ISBN, or PMID into Zotero.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `action` | `string` | Yes | 'by_doi', 'by_isbn', or 'by_pmid' |
 | `identifier` | `string` | Yes | Identifier to import |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -234,7 +240,7 @@ Use when you need to import a DOI, ISBN, or PMID into Zotero.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON object containing `success`, `operation`, `stage`, and the newly created `item_key`.
 
@@ -242,17 +248,17 @@ Returns a JSON object containing `success`, `operation`, `stage`, and the newly 
 
 Use when you need to import many identifiers into Zotero at once.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `identifiers` | `array(string)` | Yes | Identifiers to import in order |
 | `id_type` | `string` | No | 'doi', 'isbn', or 'pmid' |
 | `collection` | `string` | No | Collection key to add imported items into |
-| `tags` | `string` | No | Comma-separated tags to add to imported items |
+| `tags` | `array(string)` | No | Tags to add to imported items |
 | `force` | `boolean` | No | Skip duplicate detection |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -261,7 +267,7 @@ Use when you need to import many identifiers into Zotero at once.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON object with overall `success`, and arrays of `successful_imports` and `failed_imports`.
 
@@ -269,14 +275,14 @@ Returns a JSON object with overall `success`, and arrays of `successful_imports`
 
 Use when you need a text export of the Zotero library.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `action` | `string` | Yes | 'json', 'bibtex', 'csv', 'ris', or 'csljson' |
 | `collection` | `string` | No | Optional collection key filter |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -284,7 +290,7 @@ Use when you need a text export of the Zotero library.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a string containing the library exported in the specified text format.
 
@@ -292,7 +298,7 @@ Returns a string containing the library exported in the specified text format.
 
 Use when you need to inspect collections or move an item into one.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -300,7 +306,7 @@ Use when you need to inspect collections or move an item into one.
 | `item_key` | `string` | No | Item key |
 | `collection_key` | `string` | No | Collection key |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -308,7 +314,7 @@ Use when you need to inspect collections or move an item into one.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 For `list`, returns a JSON array of collection objects. For `move_item`, returns a JSON object indicating `success`.
 
@@ -316,13 +322,13 @@ For `list`, returns a JSON array of collection objects. For `move_item`, returns
 
 Use when you need to move one or more Zotero items to trash.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `item_keys` | `array(string)` | Yes | Item keys to move to trash |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -330,7 +336,7 @@ Use when you need to move one or more Zotero items to trash.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON object indicating `success`, `operation`, `stage`, and the `item_keys` moved to trash.
 
@@ -338,13 +344,13 @@ Returns a JSON object indicating `success`, `operation`, `stage`, and the `item_
 
 Use when you need a summary of which Zotero items are missing PDFs.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `collection` | `string` | No | Optional collection key filter |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -352,7 +358,7 @@ Use when you need a summary of which Zotero items are missing PDFs.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON object listing items missing PDFs, grouped or formatted according to the check structure.
 
@@ -360,14 +366,14 @@ Returns a JSON object listing items missing PDFs, grouped or formatted according
 
 Use when you need to match citation text against the local Zotero library.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `text` | `string` | Yes | Citation text in Author (Year) form |
 | `collection` | `string` | No | Optional collection key filter |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -375,7 +381,7 @@ Use when you need to match citation text against the local Zotero library.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON array of matching items from the local library.
 
@@ -383,7 +389,7 @@ Returns a JSON array of matching items from the local library.
 
 Use when you need CrossRef-powered DOI backfilling for local Zotero items.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -391,7 +397,7 @@ Use when you need CrossRef-powered DOI backfilling for local Zotero items.
 | `limit` | `number` | No | Maximum items to process |
 | `collection` | `string` | No | Collection key filter |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -400,7 +406,7 @@ Use when you need CrossRef-powered DOI backfilling for local Zotero items.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON object with counts of processed items, matched DOIs, and (if `apply` is true) successfully updated items.
 
@@ -408,7 +414,7 @@ Returns a JSON object with counts of processed items, matched DOIs, and (if `app
 
 Use when you need to discover or attach open-access PDFs for Zotero items.
 
-#### Input
+**Input**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -419,7 +425,7 @@ Use when you need to discover or attach open-access PDFs for Zotero items.
 | `upload` | `boolean` | No | Upload fetched PDFs to Zotero storage |
 | `sources` | `array(string)` | No | PDF sources to try in order |
 
-#### Example Input
+**Example Input**
 
 ```json
 {
@@ -428,7 +434,7 @@ Use when you need to discover or attach open-access PDFs for Zotero items.
 }
 ```
 
-#### Output Contract
+**Output Contract**
 
 Returns a JSON object with discovery results, including which sources succeeded and the number of PDFs found/downloaded.
 
@@ -443,7 +449,8 @@ Returns a JSON object with discovery results, including which sources succeeded 
 
 | Dependency | Purpose |
 |------------|---------|
-| Python 3.12+ | Runtime |
+| Node.js / Bun | Plugin runtime |
+| Python 3.12+ | CLI / MCP runtime |
 | Zotero API | Data source |
 
 ## Development Setup
@@ -451,7 +458,6 @@ Returns a JSON object with discovery results, including which sources succeeded 
 For contributors working on the plugin locally:
 
 ```bash
-cd ./opencode-zotero-plugin
 direnv allow .
 just install
 ```
