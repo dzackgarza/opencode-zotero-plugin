@@ -47,7 +47,7 @@ Direct CLI usage (bypasses plugin):
 
 ```bash
 # Direct CLI usage (bypasses plugin)
-opencode-zotero-plugin --help
+cd python && uv run python -m zotero_librarian._cli --help
 ```
 
 ## Tools
