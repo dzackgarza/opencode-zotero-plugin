@@ -13,7 +13,15 @@ async function callZotero(
     const cliGitRepo = 'git+file:///home/dzack/opencode-plugins/zotero-manager';
     const { stdout } = await execFileAsync(
       'uvx',
-      ['--from', cliGitRepo, 'zotero-lib', toolName, JSON.stringify(args)],
+      [
+        '--from',
+        cliGitRepo,
+        'python',
+        '-m',
+        'zotero_librarian._dispatch',
+        toolName,
+        JSON.stringify(args),
+      ],
       {
         timeout: PYTHON_COMMAND_TIMEOUT_MS,
       },
