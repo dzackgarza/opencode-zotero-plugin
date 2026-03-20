@@ -4,18 +4,20 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const PYTHON_COMMAND_TIMEOUT_MS = 90000;
+const CLI_SPEC =
+  process.env.ZOTERO_LIBRARIAN_CLI_SPEC ??
+  'file:///home/dzack/opencode-plugins/clis/zotero-librarian';
 
 async function callZotero(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<string> {
   try {
-    const cliGitRepo = 'git+file:///home/dzack/opencode-plugins/zotero-manager';
     const { stdout } = await execFileAsync(
       'uvx',
       [
         '--from',
-        cliGitRepo,
+        CLI_SPEC,
         'python',
         '-m',
         'zotero_librarian._dispatch',
