@@ -6,7 +6,7 @@ const execFileAsync = promisify(execFile);
 const PYTHON_COMMAND_TIMEOUT_MS = 90000;
 const CLI_SPEC =
   process.env.ZOTERO_LIBRARIAN_CLI_SPEC ??
-  'file:///home/dzack/opencode-plugins/clis/zotero-librarian';
+  'git+https://github.com/dzackgarza/zotero-manager.git';
 
 async function callZotero(
   toolName: string,
