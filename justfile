@@ -29,10 +29,8 @@ test: justfile-hygiene
     }
     trap cleanup EXIT
 
-    TEST_SANDBOX_CONFIG_JSON="{{repo_root}}/tests/integration/opencode.json" \
-        just -f "$root_justfile" test-sandbox-up
-    source "{{repo_root}}/../../.test-sandbox-env.sh"
-    cd "{{repo_root}}" && bun test tests/integration
+    just -f "$root_justfile" test-sandbox-up config="{{repo_root}}/tests/integration/opencode.json" envrc="{{repo_root}}/.envrc"
+    direnv exec "{{repo_root}}" bun test tests/integration
 
 # Run all checks
 check: justfile-hygiene typecheck test
