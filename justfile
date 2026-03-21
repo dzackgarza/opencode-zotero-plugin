@@ -1,28 +1,55 @@
 set fallback := true
+repo_root := justfile_directory()
 
 # opencode-zotero-plugin justfile
 
-# Run all checks
-check: typecheck
+justfile-hygiene:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ -e "{{repo_root}}/Justfile" ]; then
+    echo "Remove Justfile; use lowercase justfile as the single canonical entrypoint." >&2
+    exit 1
+  fi
 
-# TypeScript typecheck
-typecheck:
-    bun run typecheck
+# Run TypeScript typecheck
+typecheck: justfile-hygiene
+    direnv exec "{{repo_root}}" bunx tsc --noEmit
 
 # Install TS dependencies
-install:
-    bun install
+install: justfile-hygiene
+    direnv exec "{{repo_root}}" bun install
 
-# Run opencode with this plugin for testing
-run prompt:
-    \opencode run --agent Minimal '{{ prompt }}'
+# Run tests (no integration tests yet; placeholder for future live proof)
+test: justfile-hygiene
+    direnv exec "{{repo_root}}" bun test
+
+# Run all checks
+check: justfile-hygiene typecheck test
 
 # Setup npm trusted publisher (one-time manual setup)
 setup-npm-trust:
-    npm trust github --repository dzackgarza/{{ file_stem(justfile_directory()) }} --file publish.yml
+  #!/usr/bin/env bash
+  set -euo pipefail
+  npm trust github --repository "dzackgarza/$(basename "{{repo_root}}")" --file publish.yml
 
 # Manual publish from local (requires 2FA)
-publish:
-    npm publish
+publish: check
+    direnv exec "{{repo_root}}" npm publish
 
-set unstable := true
+# Bump patch version, commit, and tag
+bump-patch:
+    npm version patch --no-git-tag-version
+    git add package.json
+    git commit -m "chore: bump version to v$(node -p 'require(\"./package.json\").version')"
+    git tag "v$(node -p 'require(\"./package.json\").version')"
+
+# Bump minor version, commit, and tag
+bump-minor:
+    npm version minor --no-git-tag-version
+    git add package.json
+    git commit -m "chore: bump version to v$(node -p 'require(\"./package.json\").version')"
+    git tag "v$(node -p 'require(\"./package.json\").version')"
+
+# Push commits and tags to trigger CI release
+release: check
+    git push && git push --tags
