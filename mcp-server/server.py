@@ -1,13 +1,17 @@
 """FastMCP server for Zotero library management."""
 
 import json
+import os
 import subprocess
 from typing import Annotated, Any
 
 from fastmcp import FastMCP
 from pydantic import Field
 
-MANAGER_REPO = "file:///home/dzack/opencode-plugins/clis/zotero-librarian"
+MANAGER_REPO = os.environ.get(
+    "ZOTERO_LIBRARIAN_CLI_SPEC",
+    "git+https://github.com/dzackgarza/zotero-manager.git",
+)
 
 
 def _run_dispatch(tool_name: str, args: dict) -> Any:
